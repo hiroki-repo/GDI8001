@@ -238,7 +238,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x2B:
         case 0x2D:
         case 0x2F:
-            if (prm_1 == 0x40) { cmtreseted = true; }
+            //if (prm_1 == 0x40) { cmtreseted = true; }
             return 0;
             if (upd8251configate == 1) { uPD8251config[3] = (prm_1 & 0xFF);/*=(upd8251config&0x00FFFFFF)|((_z80_data&0xFF)<<24)*/ if (uPD8251config[3] & 64) { uPD8251config[0] = 0; uPD8251config[1] = 0; uPD8251config[2] = 0; uPD8251config[3] = 0; } if (uPD8251config[3] & 16) { overrunerror = false; rxdataready = false; } }
             else { uPD8251config[0] = (prm_1 & 0xFF);/*upd8251config=(upd8251config&0xFFFFFF00)|((_z80_data&0xFF)<<0)*/ }
@@ -420,7 +420,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x2E:
             //MessageBoxA(0, "A", "A", 0);
             if (cmtreseted == true) { cmtreseted = false; cmtseek = 0; return 0xff; }
-            else { cmtfile = fopen(FileName, "rb"); if (cmtfile != 0) { struct _stat buf; int result = _stat(FileName, &buf); if (buf.st_size <= cmtseek) { cmtseek = 0; } fseek(cmtfile, cmtseek++, SEEK_SET); ret = fgetc(cmtfile); fclose(cmtfile); return ret; } else { return 0xff; } }
+            else { cmtfile = fopen(FileName, "rb"); if (cmtfile != 0) { struct _stat buf; int result = _stat(FileName, &buf); if (buf.st_size <= cmtseek) { cmtseek = 0; fclose(cmtfile); return 0xFF; } fseek(cmtfile, cmtseek++, SEEK_SET); ret = fgetc(cmtfile); fclose(cmtfile); return ret; } else { return 0xff; } }
             return 0xff;
             //if (uPD8251config[3] & 4) { if (cmtreseted == true) { cmtreseted = false; cmtseek = 0; return 0xff; } else { cmtfile = fopen(FileName, "rb"); if (cmtfile != 0) { fseek(cmtfile, cmtseek++, SEEK_SET); ret = fgetc(cmtfile); fclose(cmtfile); return ret; } } }
             return uPD8251config[2];
@@ -433,7 +433,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x2B:
         case 0x2D:
         case 0x2F:
-            return 0x07;
+            //return 0x07;
             return uPD8251config[1] | (( rxdataready ? 1 : 0 ) << 1) | ( ( ( uPD8251config[3] & 1 ) ? 1 : 0) << 0 );
             break;
         case 0x30:
