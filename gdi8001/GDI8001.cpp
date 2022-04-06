@@ -110,7 +110,11 @@ typedef signed long int32;
 
 #pragma warning(disable : 4996)
 
+#ifdef _ARM_
+#pragma comment(lib,"bz80dll_arm.lib")
+#else
 #pragma comment(lib,"bz80dll.lib")
+#endif
 extern "C" __declspec(dllimport) void setz80memaccess(int (*tmp)(int, int, int));
 extern "C" __declspec(dllimport) void Z80Init(void);
 extern "C" __declspec(dllimport) void Z80Reset(void);
