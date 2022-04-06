@@ -1,8 +1,6 @@
 ﻿// GDI8001.cpp : アプリケーションのエントリ ポイントを定義します。
 //
 
-#define _USE_32BIT_TIME_T
-
 #pragma warning(disable : 4996)
 
 #include <stdio.h>
@@ -15,6 +13,59 @@
 #include <time.h>
 
 #include <shobjidl_core.h>
+
+bool isbeepplayed = false;
+
+#define SRATE    44100    //標本化周波数(1秒間のサンプル数)
+#define F        2400     //周波数(1秒間の波形数)
+
+WAVEFORMATEX wfe;
+static HWAVEOUT hWaveOut;
+static WAVEHDR whdr;
+static LPBYTE lpWave;
+int i, len;
+
+
+void beepinit() {
+
+    wfe.wFormatTag = WAVE_FORMAT_PCM;
+    wfe.nChannels = 1;    //モノラル
+    wfe.wBitsPerSample = 8;    //量子化ビット数
+    wfe.nBlockAlign = wfe.nChannels * wfe.wBitsPerSample / 8;
+    wfe.nSamplesPerSec = SRATE;    //標本化周波数
+    wfe.nAvgBytesPerSec = wfe.nSamplesPerSec * wfe.nBlockAlign;
+
+    waveOutOpen(&hWaveOut, WAVE_MAPPER, &wfe, 0, 0, CALLBACK_NULL);
+
+    lpWave = (LPBYTE)calloc(wfe.nAvgBytesPerSec, 2);    //2秒分
+
+    len = SRATE / F;    //波長
+    for (i = 0; i < SRATE * 2; i++) {  //波形データ作成
+        if (i % len < len / 2)    lpWave[i] = 128 + 64;
+        else                 lpWave[i] = 128 - 64;
+    }
+
+    whdr.lpData = (LPSTR)lpWave;
+    whdr.dwBufferLength = wfe.nAvgBytesPerSec * 2;
+    whdr.dwFlags = WHDR_BEGINLOOP | WHDR_ENDLOOP;
+    whdr.dwLoops = 1;
+
+    waveOutPrepareHeader(hWaveOut, &whdr, sizeof(WAVEHDR));
+}
+
+void beep2400play() {
+    if (isbeepplayed == false) {
+        waveOutWrite(hWaveOut, &whdr, sizeof(WAVEHDR));
+        isbeepplayed = true;
+    }
+}
+
+void beep2400stop(){
+    if (isbeepplayed == true) {
+        waveOutReset(hWaveOut);
+        isbeepplayed = false;
+    }
+}
 
 FILE* cmtfile;
 char FileName[MAX_PATH * 2];
@@ -153,9 +204,9 @@ bool cmtdatawr = false;
 bool crtmodectrl = false;
 bool pc8001widthflag = false;
 
-int timexforch1[9];
-int timezforch1[9];
-int timerforch123 = 0;
+tm* timexforch1;
+tm timezforch1;
+time_t timerforch123;
 uint8 rtctimeforminus[5];
 
 uint8 pch = 0;
@@ -169,7 +220,7 @@ int rtctimeforminusck3[5] = { 59, 59, 23, 31, 12 };
 int rtctimeforminusck2[5];
 tm* timey;
 
-uint8 rtcpos = 0;
+uint16 rtcpos = 0;
 int rtctimetmp[5];
 int rtctime[5];
 
@@ -183,8 +234,8 @@ uint8 ioporte6h = 0;
 
 uint8 pc8001kmp[256] = { 255,255,255,255,255,255,255,255,131,255,255,255,255,23,255,255,134,135,132,255,255,255,255,255,255,255,255,151,255,133,255,255,150,255,255,144,128,130,129,130,129,255,255,255,255,255,22,255,96,97,98,99,100,101,102,103,112,113,255,255,255,255,255,255,255,33,34,35,36,37,38,39,48,49,50,51,52,53,54,55,64,65,66,67,68,69,70,71,80,81,82,255,255,132,255,255,0,1,2,3,4,5,6,7,16,17,18,19,20,21,255,255,145,146,147,148,149,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,114,115,116,87,117,118,32,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,83,84,85,86,255,255,255,119,255,255,133,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255 };
 
-void rtcstrobe() { timezforch1[0] = rtctimeforminus[0] % 60, rtctimeforminus[1] % 60, rtctimeforminus[2] % 24, rtctimeforminus[3] % 32, (rtctimeforminus[4] - 1) % 12, 71, 0, 0, 0; timerforch123 = time(0) - mktime((tm*)&timexforch1) + mktime((tm*)&timezforch1); timey = localtime((time_t*)&timerforch123); switch (pch & 0xF) { case 1:rtcpos = 0; rtctime[4] = rtctimeforminusck2[4] << 4; rtctime[3] = ((rtctimeforminusck2[3] / 10) << 4) + rtctimeforminusck2[3] % 10; rtctime[2] = ((rtctimeforminusck2[2] / 10) << 4) + rtctimeforminusck2[2] % 10; rtctime[1] = ((rtctimeforminusck2[1] / 10) << 4) + rtctimeforminusck2[1] % 10; rtctime[0] = ((rtctimeforminusck2[0] / 10) << 4) + rtctimeforminusck2[0] % 10; rtcdata = rtctime[0] & 0x01; break; case 2:for (int cnt = 0; cnt < 5; cnt++) { rtctime[cnt] = rtctimetmp[cnt]; }for (int cnt = 0; cnt < 5; cnt++) { if (cnt != 4) { rtctimeforminus[cnt] = (((rtctime[cnt] >> 4) * 10) + (rtctime[cnt] & 15)); } else { rtctimeforminus[cnt] = (rtctime[cnt] >> 4); } } break; } }
-void rtcshift() {if(rtcpos<40){rtctimetmp[rtcpos>>3]|= (pch >> 3 & 1) << (rtcpos & 7);rtcpos+=1;rtcdata=rtctime[rtcpos >> 3] >> (rtcpos & 7) & 1;}}
+void rtcstrobe() { timezforch1.tm_sec = rtctimeforminus[0] % 60; timezforch1.tm_min = rtctimeforminus[1] % 60; timezforch1.tm_hour = rtctimeforminus[2] % 24; timezforch1.tm_mday = rtctimeforminus[3] % 32; timezforch1.tm_mon = (rtctimeforminus[4] - 1) % 12; timezforch1.tm_year = 71; timerforch123 = time(0) - mktime(timexforch1) + mktime(&timezforch1); timey = localtime(&timerforch123); rtctimeforminusck2[0] = timey->tm_sec; rtctimeforminusck2[1] = timey->tm_min; rtctimeforminusck2[2] = timey->tm_hour; rtctimeforminusck2[3] = timey->tm_mday; rtctimeforminusck2[4] = timey->tm_mon + 1; switch (pch & 0xF) { case 1:rtcpos = 0; rtctime[4] = rtctimeforminusck2[4] << 4; rtctime[3] = ((rtctimeforminusck2[3] / 10) << 4) + rtctimeforminusck2[3] % 10; rtctime[2] = ((rtctimeforminusck2[2] / 10) << 4) + rtctimeforminusck2[2] % 10; rtctime[1] = ((rtctimeforminusck2[1] / 10) << 4) + rtctimeforminusck2[1] % 10; rtctime[0] = ((rtctimeforminusck2[0] / 10) << 4) + rtctimeforminusck2[0] % 10; rtcdata = rtctime[0] & 0x01; break; case 2:for (int cnt = 0; cnt < 5; cnt++) { rtctime[cnt] = rtctimetmp[cnt]; }for (int cnt = 0; cnt < 5; cnt++) { if (cnt != 4) { rtctimeforminus[cnt] = (((rtctime[cnt] >> 4) * 10) + (rtctime[cnt] & 15)); } else { rtctimeforminus[cnt] = (rtctime[cnt] >> 4); } } break; } }
+void rtcshift() {if(rtcpos<40){rtctimetmp[rtcpos>>3]|= (pch >> 3 & 1) << (rtcpos & 7);rtcpos+=1;rtcdata=(rtctime[rtcpos >> 3] >> (rtcpos & 7) & 1)? true :false; }}
 void prtstrobe() {if (prtenable && prtenable0 != 0 && pch != 13){}prtenable0 = prtenable;}
 
 bool cmtreseted = false;
@@ -554,7 +605,7 @@ void RunZ80Infinity(LPVOID* arg4rz80) { while (true) { clockcount = 0; int clock
 void Z80INT(uint8 prm_0) { z80irqid = 1; z80irqfn = prm_0; }
 void Z80NMI() { z80irqid = 2; }
 
-void BeepService(LPVOID* arg4bs) { while (true) { if (beepenabled) { Beep(2400, 100); } } }
+void BeepService(LPVOID* arg4bs) { while (true) { if (beepenabled) { /*Beep(2400, 100);*/ beep2400play(); } else { beep2400stop(); } } }
 
 void RTIService(LPVOID* arg4rtisv) { while (true) { if (ioporte6h & 1) { Z80INT(4); } Sleep(2); } }
 
@@ -689,6 +740,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
+    beepinit();
+
     Z80Init();
     setz80memaccess(z80memaccess);
 
@@ -705,9 +758,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     time_t timer = time(NULL);
-    tm* timexforch1charx = localtime(&timer);
+    timexforch1 = localtime(&timer);
 
-    timexforch1[0] = timexforch1charx->tm_sec, timexforch1charx->tm_min, timexforch1charx->tm_hour, timexforch1charx->tm_mday, timexforch1charx->tm_mon, timexforch1charx->tm_year - 9, 0, 0, 0;
+    //rtctimeforminus
+
+    //timexforch1[0] = timexforch1charx->tm_sec, timexforch1charx->tm_min, timexforch1charx->tm_hour, timexforch1charx->tm_mday, timexforch1charx->tm_mon, timexforch1charx->tm_year - 9, 0, 0, 0;
 
     Z80Threadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)RunZ80Infinity, 0, 0, 0);
     BSThreadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)BeepService, 0, 0, 0);
@@ -880,6 +935,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         break;
     case WM_DESTROY:
+        waveOutUnprepareHeader(hWaveOut, &whdr, sizeof(WAVEHDR));
+        waveOutClose(hWaveOut);
+        free(lpWave);
         PostQuitMessage(0);
         break;
     default:
