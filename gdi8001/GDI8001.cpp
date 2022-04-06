@@ -48,7 +48,7 @@ void beepinit() {
     whdr.lpData = (LPSTR)lpWave;
     whdr.dwBufferLength = wfe.nAvgBytesPerSec * 2;
     whdr.dwFlags = WHDR_BEGINLOOP | WHDR_ENDLOOP;
-    whdr.dwLoops = 1;
+    whdr.dwLoops = -1;
 
     waveOutPrepareHeader(hWaveOut, &whdr, sizeof(WAVEHDR));
 }
