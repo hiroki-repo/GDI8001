@@ -643,7 +643,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
     }
     BOOL isretvalfrompluginactive = false;
     UINT8 retvalfromplugin = 0;
-    for (int cnt = 0; cnt < howmanypluginsloaded; cnt++) { for (int cnt4pluginctx = 0; cnt4pluginctx < 24; cnt4pluginctx++) { if ((pluginctx[cnt].ispluginloaded == true) && ((pluginctx[cnt].plugintype[cnt4pluginctx]) & 0x10000)) { retvalfromplugin |= pluginctx[cnt].uniquememaccess(prm_0, prm_1, prm_2); isretvalfrompluginactive = true; } } }
+    for (int cnt = 0; cnt < howmanypluginsloaded; cnt++) { for (int cnt4pluginctx = 0; cnt4pluginctx < 24; cnt4pluginctx++) { if ((pluginctx[cnt].ispluginloaded == true) && ((pluginctx[cnt].plugintype[cnt4pluginctx]) & 0x10000)) { if (pluginctx[cnt].isexecutedontheemulator == false) { retvalfromplugin |= pluginctx[cnt].uniquememaccess(prm_0, prm_1, prm_2); } else { retvalfromplugin |= EmuExecute((DWORD)&pluginctx[cnt].uniquememaccess, 3, prm_0, prm_1, prm_2); } isretvalfrompluginactive = true; } } }
     if (isretvalfrompluginactive == true) { return retvalfromplugin; }
     else { return 0xff; }
 }
