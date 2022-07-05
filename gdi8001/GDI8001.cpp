@@ -244,6 +244,51 @@ void prtstrobe() {if (prtenable && prtenable0 != 0 && pch != 13){}prtenable0 = p
 
 bool cmtreseted = false;
 
+UINT16 howmanypluginsloaded;
+
+struct typeofpluginctx {
+    UINT32 version;
+    BOOL ispluginloaded;
+    BOOL isexecutedontheemulator;
+    UINT32 plugintype[24];
+    int(*ptrofz80memaccess)(int,int,int);
+    int(*uniquememaccess)(int, int, int);
+} pluginctx[1024];
+
+typedef BOOL typeofEmuInitialize(void);
+BOOL(*EmuInitialize)(void);
+typedef DWORD typeofEmuExecute(DWORD Addr, int NParams, ...);
+DWORD(*EmuExecute)(DWORD Addr, int NParams, ...);
+
+typedef DWORD typeofPeLdrLoadModule(LPCWSTR FileName);
+DWORD(*PeLdrLoadModule)(LPCWSTR FileName);
+typedef DWORD typeofPeLdrLoadModuleA(LPCSTR FileNameA);
+DWORD(*PeLdrLoadModuleA)(LPCSTR FileNameA);
+typedef DWORD typeofPeLdrGetModuleBase(DWORD Pe);
+DWORD(*PeLdrGetModuleBase)(DWORD Pe);
+
+typedef DWORD typeofPeLdrFindModuleByBase(DWORD Base);
+DWORD(*PeLdrFindModuleByBase)(DWORD Base);
+typedef FARPROC typeofPeLdrGetProcAddressA(DWORD Pe, LPCSTR Name);
+FARPROC(*PeLdrGetProcAddressA)(DWORD Pe, LPCSTR Name);
+
+FARPROC x86_GetProcAddress(DWORD Pe, LPCSTR Name) {
+    return PeLdrGetProcAddressA(PeLdrFindModuleByBase(Pe), Name);
+}
+
+DWORD x86_LoadLibraryA(LPCSTR FileNameA) {
+    return PeLdrLoadModuleA(FileNameA);
+};
+DWORD x86_LoadLibraryW(LPCWSTR FileName) {
+    return PeLdrLoadModule(FileName);
+};
+DWORD x86_LoadLibraryAEx(LPCSTR FileNameA,HANDLE hFile,DWORD dwFlags) {
+    return PeLdrLoadModuleA(FileNameA);
+};
+DWORD x86_LoadLibraryWEx(LPCWSTR FileName,HANDLE hFile,DWORD dwFlags) {
+    return PeLdrLoadModule(FileName);
+};
+
 int z80memaccess(int prm_0, int prm_1, int prm_2) {
     switch (prm_2){
     case 0:
@@ -593,10 +638,14 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
 			return ioporte6h;
 			break;
         }
-        return 0xff;
+        //return 0xff;
         break;
     }
-    return 0;
+    BOOL isretvalfrompluginactive = false;
+    UINT8 retvalfromplugin = 0;
+    for (int cnt = 0; cnt < howmanypluginsloaded; cnt++) { for (int cnt4pluginctx = 0; cnt4pluginctx < 24; cnt4pluginctx++) { if ((pluginctx[cnt].ispluginloaded == true) && ((pluginctx[cnt].plugintype[cnt4pluginctx]) & 0x10000)) { retvalfromplugin |= pluginctx[cnt].uniquememaccess(prm_0, prm_1, prm_2); isretvalfrompluginactive = true; } } }
+    if (isretvalfrompluginactive == true) { return retvalfromplugin; }
+    else { return 0xff; }
 }
 
 HWND hwnd4mw;
@@ -604,7 +653,7 @@ HWND hwnd4mw;
 uint8 z80irqid = 0;
 uint8 z80irqfn = 0;
 
-void RunZ80Infinity(LPVOID* arg4rz80) { while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal = 0; while (clockcountinternal < (graphicdraw ? 183000 : 400000)) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } clockcountinternal += Z80Run(); vbi = vbi ? false : true; } clockcount += clockcountinternal; Sleep(100); } int z80timerint = time(NULL) - z80timerbefore; /*if (z80timerint < 1000) { Sleep(1000 - z80timerint); }*/ } }
+void RunZ80Infinity(LPVOID* arg4rz80) { UINT32 z80timemintab[2] = { 0, 0 }; SYSTEMTIME z80timeminta; while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal = 0; GetSystemTime(&z80timeminta); z80timemintab[0] = (z80timeminta.wMilliseconds)+(time(NULL)*1000); while (clockcountinternal < (graphicdraw ? 183000 : 400000)) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } clockcountinternal += Z80Run(); vbi = vbi ? false : true; } GetSystemTime(&z80timeminta); z80timemintab[1] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); clockcount += clockcountinternal; int timetowaitive = (z80timemintab[1] - z80timemintab[0]); /*if (timetowaitive < 0) { timetowaitive += 1000; }*/ if ((timetowaitive > 0) && (timetowaitive <= 100)) { Sleep(100 - timetowaitive); } else { Sleep(100); } } int z80timerint = time(NULL) - z80timerbefore; /*if (z80timerint < 1000) { Sleep(1000 - z80timerint); }*/ } }
 
 void Z80INT(uint8 prm_0) { z80irqid = 1; z80irqfn = prm_0; }
 void Z80NMI() { z80irqid = 2; }
@@ -705,9 +754,9 @@ void Drawbackground(LPVOID* arg4dbg) {
 					if ((charattribute & 128) || (attributegcold == true)) { for (int cnt = 0; cnt < 8; cnt++) { if ((char4show >> cnt) & 1) { SetBox(((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 0)) - 0, ((drawbacky + 0) * 8) + (2 * ((cnt % 4) + 0)) - 0, ((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 1)) - 0, ((drawbacky + 0) * 8) + (2 * ((cnt % 4) + 1)) - 0); } } }
 					else { DrawFont(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), char4show); }
 					//SetPalette4emu(9); SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
-					if (charattribute & 64) { SetBox(((drawbackx + 0) * 8) + 3, ((drawbacky + 0) * 8), ((drawbackx + 0) * 8) + 4, ((drawbacky + 1) * 8) - 1); }
-                    if (charattribute & 32) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 1) * 8) - 2, ((drawbackx + 1) * 8), ((drawbacky + 1) * 8) - 1); }
-                    if (charattribute & 16) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8), ((drawbacky + 0) * 8) + 1); }
+					if (charattribute & 64) { SetBox(((drawbackx + 0) * 8) + 3, ((drawbacky + 0) * 8), ((drawbackx + 0) * 8) + 4, ((drawbacky + 1) * 8) - 0); }
+                    if (charattribute & 32) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 1) * 8) - 2, ((drawbackx + 1) * 8), ((drawbacky + 1) * 8) - 0); }
+                    if (charattribute & 16) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8), ((drawbacky + 0) * 8) + 0); }
                 }
                 }
             }
@@ -737,9 +786,9 @@ LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
-                     _In_opt_ HINSTANCE hPrevInstance,
-                     _In_ LPWSTR    lpCmdLine,
-                     _In_ int       nCmdShow)
+    _In_opt_ HINSTANCE hPrevInstance,
+    _In_ LPWSTR    lpCmdLine,
+    _In_ int       nCmdShow)
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
@@ -748,6 +797,51 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     Z80Init();
     setz80memaccess(z80memaccess);
+
+    FILE* checkexist4x86plugin=fopen("peldr.nt.dll", "rb");
+    if (checkexist4x86plugin != 0) {
+        HMODULE peldr4runtheplugin = LoadLibraryA("peldr.nt.dll"); 
+        PeLdrLoadModule = (typeofPeLdrLoadModule*)GetProcAddress(peldr4runtheplugin,"PeLdrLoadModule");
+        PeLdrLoadModuleA = (typeofPeLdrLoadModuleA*)GetProcAddress(peldr4runtheplugin, "PeLdrLoadModuleA");
+        PeLdrGetProcAddressA = (typeofPeLdrGetProcAddressA*)GetProcAddress(peldr4runtheplugin, "PeLdrGetProcAddressA");
+        PeLdrGetModuleBase = (typeofPeLdrGetModuleBase*)GetProcAddress(peldr4runtheplugin, "PeLdrGetModuleBase");
+        PeLdrFindModuleByBase = (typeofPeLdrFindModuleByBase*)GetProcAddress(peldr4runtheplugin, "PeLdrFindModuleByBase");
+        fclose(checkexist4x86plugin);
+    }
+    checkexist4x86plugin = fopen("np21w_emu.dll", "rb");
+    if (checkexist4x86plugin != 0) {
+        HMODULE emu4runtheplugin = LoadLibraryA("np21w_emu.dll");
+        EmuInitialize = (typeofEmuInitialize*)GetProcAddress(emu4runtheplugin,"EmuInitialize");
+        EmuExecute= (typeofEmuExecute*)GetProcAddress(emu4runtheplugin, "EmuExecute");
+        fclose(checkexist4x86plugin);
+    }
+
+    WIN32_FIND_DATAA pluginlister;
+    HANDLE handleofpluginlister;
+    typedef void typeoftheinitplugin(void*);
+    void (*initplugin)(void*);
+    handleofpluginlister = FindFirstFileA("plugins\\*.dll",&pluginlister);
+    if (handleofpluginlister != INVALID_HANDLE_VALUE) {
+        for (int cnt = 0; cnt < 1024; cnt++) {
+            pluginctx[cnt].ptrofz80memaccess = z80memaccess;
+            pluginctx[cnt].version = 0x00000001;
+            if ((pluginlister.dwFileAttributes & 0x10) == 0) {
+                HMODULE handleofplugindll = LoadLibraryA(pluginlister.cFileName);
+                if (handleofplugindll == nullptr) {
+                    pluginctx[cnt].isexecutedontheemulator = true;
+                    handleofplugindll = (HMODULE)x86_LoadLibraryA(pluginlister.cFileName);
+                    initplugin = (typeoftheinitplugin*)x86_GetProcAddress((DWORD)handleofplugindll, "InitPlugin");
+                    EmuExecute((DWORD)&initplugin, 1, &pluginctx[cnt]);
+                }
+                else {
+                    pluginctx[cnt].isexecutedontheemulator = false;
+                    initplugin = (typeoftheinitplugin*)GetProcAddress(handleofplugindll, "InitPlugin");
+                    initplugin(&pluginctx[cnt]);
+                }
+            }
+            if (FindNextFileA(handleofpluginlister, &pluginlister) == false) { break; }
+        }
+    }
 
     FILE *biosfile = fopen("n80basic.rom","rb");
     if (biosfile != 0) {
