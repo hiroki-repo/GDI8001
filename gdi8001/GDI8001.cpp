@@ -776,18 +776,19 @@ void DrawGrp() {
     if (blinkingtime == blinkwaitisti) { blinkai2 = blinkai2 ? false : true; }
     if ((blinkingtime * 2) <= blinkwaitisti) { blinkai = blinkai ? false : true; blinkwaitisti = 0; }
     blinkwaitisti++;
+    RECT rw4rend;
+    if (bool4showwin) {
+        GetClientRect(hwnd4mw, &rw4rend);
+        if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { StretchBlt(hdc, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 480, SRCCOPY); }
+    }
+    else {
+        GetClientRect(HWNDfullscr, &rw4rend);
+        if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { StretchBlt(hdcfullscr, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 480, SRCCOPY); }
+    }
 }
 
 void Drawbackground(LPVOID* arg4dbg) {
     while (true) {
-        RECT rw4rend;
-        if (bool4showwin) {
-            GetClientRect(hwnd4mw, &rw4rend);
-            if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { StretchBlt(hdc, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 480, SRCCOPY); }
-        } else {
-            GetClientRect(HWNDfullscr, &rw4rend);
-            if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { StretchBlt(hdcfullscr, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 480, SRCCOPY); }
-        }
         Sleep(16);
     }
 }
