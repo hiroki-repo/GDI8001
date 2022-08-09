@@ -14,7 +14,10 @@
 
 #include <shobjidl_core.h>
 
+HWND HWNDfullscr;
+
 bool isbeepplayed = false;
+bool bool4showwin = true;
 
 #define SRATE    44100    //標本化周波数(1秒間のサンプル数)
 #define F        2400     //周波数(1秒間の波形数)
@@ -192,6 +195,7 @@ uint8 seq = 0;
 uint8 crtc3 = 0;
 
 HDC hdc = 0;
+HDC hdcfullscr = 0;
 HBITMAP hOldCBitmap;
 
 int pc8001kb1p;
@@ -230,6 +234,8 @@ int rtctime[5];
 
 HDC hCDC;
 HBITMAP hCBitmap;
+HDC hCDCfullscr;
+HBITMAP hCBitmapfullscr;
 HPEN hPen;
 HBRUSH hBackGround[256];
 RECT rs;
@@ -770,14 +776,18 @@ void DrawGrp() {
     if (blinkingtime == blinkwaitisti) { blinkai2 = blinkai2 ? false : true; }
     if ((blinkingtime * 2) <= blinkwaitisti) { blinkai = blinkai ? false : true; blinkwaitisti = 0; }
     blinkwaitisti++;
-    RECT rw4rend;
-    GetClientRect(hwnd4mw, &rw4rend);
-
-    if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { StretchBlt(hdc, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 480, SRCCOPY); }
 }
 
 void Drawbackground(LPVOID* arg4dbg) {
     while (true) {
+        RECT rw4rend;
+        if (bool4showwin) {
+            GetClientRect(hwnd4mw, &rw4rend);
+            if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { StretchBlt(hdc, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 480, SRCCOPY); }
+        } else {
+            GetClientRect(HWNDfullscr, &rw4rend);
+            if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { StretchBlt(hdcfullscr, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 480, SRCCOPY); }
+        }
         Sleep(16);
     }
 }
@@ -788,6 +798,7 @@ void Drawbackground(LPVOID* arg4dbg) {
 HINSTANCE hInst;                                // 現在のインターフェイス
 WCHAR szTitle[MAX_LOADSTRING];                  // タイトル バーのテキスト
 WCHAR szWindowClass[MAX_LOADSTRING];            // メイン ウィンドウ クラス名
+WCHAR szWindowClass2[MAX_LOADSTRING];            // メイン ウィンドウ クラス名
 
 // このコード モジュールに含まれる関数の宣言を転送します:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -884,6 +895,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // グローバル文字列を初期化する
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_GDI8001, szWindowClass, MAX_LOADSTRING);
+    wcscat(szWindowClass2, szWindowClass);
+    wcscat(szWindowClass2, L"_fullscr");
     MyRegisterClass(hInstance);
 
     // アプリケーション初期化の実行:
@@ -934,6 +947,23 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
     wcex.lpszClassName  = szWindowClass;
     wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
+    WNDCLASSEXW wcex2;
+
+    wcex2.cbSize = sizeof(WNDCLASSEX);
+
+    wcex2.style = CS_HREDRAW | CS_VREDRAW;
+    wcex2.lpfnWndProc = WndProc;
+    wcex2.cbClsExtra = 0;
+    wcex2.cbWndExtra = 0;
+    wcex2.hInstance = hInstance;
+    wcex2.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_GDI8001));
+    wcex2.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wcex2.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wcex2.lpszMenuName = 0;//MAKEINTRESOURCEW(IDC_GDI8001);
+    wcex2.lpszClassName = szWindowClass2;
+    wcex2.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+    RegisterClassExW(&wcex2);
+
     return RegisterClassExW(&wcex);
 }
 
@@ -953,6 +983,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
       CW_USEDEFAULT, 0, 640, 540, nullptr, nullptr, hInstance, nullptr);
+   HWNDfullscr = CreateWindowW(szWindowClass2, 0, WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_MAXIMIZE, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), 0, 0, hInstance, 0);
+   ShowWindow(HWNDfullscr, 5);
+   UpdateWindow(HWNDfullscr);
+   SetWindowPos(HWNDfullscr, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+   ShowWindow(HWNDfullscr, 0);
+   UpdateWindow(HWNDfullscr);
 
    if (!hWnd)
    {
@@ -962,9 +998,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    hwnd4mw = hWnd;
 
    hdc = GetDC(hWnd);
+   hdcfullscr = GetDC(HWNDfullscr);
 
    hCDC = CreateCompatibleDC(hdc);
    hCBitmap = CreateCompatibleBitmap(hdc, 640, 480);
+   hCDCfullscr = CreateCompatibleDC(hdcfullscr);
+   hCBitmapfullscr = CreateCompatibleBitmap(hdcfullscr, 640, 480);
    hPen = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
    for (int cnt = 0; cnt < 256; cnt++) {
        if (cnt < 8) { hBackGround[cnt] = CreateSolidBrush(RGB(((cnt >> 1) & 1) * 255, ((cnt >> 2) & 1) * 255, ((cnt >> 0) & 1) * 255)); }
@@ -1011,6 +1050,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 //MessageBoxA(0, FileName,"A", 0);
             }
             return 0; }
+        if (wParam == 123) {
+            if (bool4showwin) {
+                ShowWindow(hwnd4mw, 0);
+                ShowWindow(HWNDfullscr, 5);
+            }else {
+                ShowWindow(hwnd4mw, 5);
+                ShowWindow(HWNDfullscr, 0);
+            }
+            UpdateWindow(hwnd4mw);
+            UpdateWindow(HWNDfullscr);
+            bool4showwin = bool4showwin ? false : true;
+            return 0;
+        }
         pc8001kb1p = pc8001kmp[wParam];
         if (pc8001kb1p!=255){ pc8001keybool[(pc8001kb1p >> 4) & 0xF] |= 1 << (pc8001kb1p & 0xF); }
         break;
@@ -1042,7 +1094,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             // TODO: HDC を使用する描画コードをここに追加してください...
             Rectangle(hdc, 0, 0, 640, 480);  // 描画
             EndPaint(hWnd, &ps);
-        }
+    }
         break;
     case WM_DESTROY:
         waveOutUnprepareHeader(hWaveOut, &whdr, sizeof(WAVEHDR));
