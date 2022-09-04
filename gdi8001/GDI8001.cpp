@@ -806,6 +806,91 @@ void Drawbackground(LPVOID* arg4dbg) {
     }
 }
 
+void ResetEmu() {
+    biosromenabled = false;
+
+    clockcount = 0;
+    videoenabled = false;
+    beepenabled = false;
+    uPD8251config[0]=0;
+    uPD8251config[1]=0;
+    uPD8251config[2]=0;
+    uPD8251config[3]=0;
+    upd8251configate = 0;
+    overrunerror = false;
+    rxdataready = false;
+    crtc2 = 0;
+
+    bgcolor = 0;
+    colorgraphicmode = false;
+    graphicdraw = false;
+    grpmode = false;
+    romtype = false;
+
+    uipin = 0;
+    vbi = false;
+    rtcdata = false;
+    fddconnected = false;
+    cmtdatard = false;
+    prtready = false;
+
+    othercrtcio = false;
+    upd31speclzsig;
+    litepeninp;
+
+    upd3301stat = 0;
+    uPD3301prm = 0;
+    upd3301cmd = 0;
+
+    dmaas[0]=0;
+    dmaas[1]=0;
+    dmaas[2]=0;
+    dmaas[3]=0;
+    dmatc[0]=0;
+    dmatc[1]=0;
+    dmatc[2]=0;
+    dmatc[3]=0;
+    dmachiocnt = 0;
+    dmamodestat = 0;
+    dmaseq = 0;
+    crtcactive = 0;
+    cursx = -1;
+    cursy = -1;
+
+    grpheight25 = false;
+    blinkingtime = 0;
+    cursxtmp = 0;
+
+    uopout = 0;
+
+    ret = 0;
+
+    seq = 0;
+
+    crtc3 = 0;
+
+    pc8001kb1p;
+
+    crtcldsclkenable = false;
+    rtcclkenable = false;
+    rtcstbenable = false;
+    prtenable = false;
+    prtenable0 = false;
+
+    cassettemtstate = false;
+    cmtbinsnd = 0;
+    cmtdatawr = false;
+    crtmodectrl = false;
+    pc8001widthflag = false;
+
+    pch = 0;
+
+    rtcpos = 0;
+
+    ioporte6h = 0;
+    Z80Init();
+}
+
 #define MAX_LOADSTRING 100
 
 // グローバル変数:
@@ -1076,6 +1161,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             UpdateWindow(hwnd4mw);
             UpdateWindow(HWNDfullscr);
             bool4showwin = bool4showwin ? false : true;
+            return 0;
+        }
+        else if (wParam == 122) {
+            ResetEmu();
             return 0;
         }
         pc8001kb1p = pc8001kmp[wParam];
