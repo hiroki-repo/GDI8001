@@ -18,3 +18,10 @@ is a PC-8001 Emulator which rends graphic GDI only!
 3, Please select the CMT File!
 
 4, Please operate to read the tape in the emulator!
+
+# How to use the full screen mode
+1, Run GDI8001
+
+2, Please push F12 Key!
+
+3, You'll get your GDI8001 fullscreen mode!
