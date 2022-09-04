@@ -27,6 +27,6 @@ is a PC-8001 Emulator which rends graphic GDI only!
 3, You'll get your GDI8001 fullscreen mode!
 
 # How to reset the GDI8001
-1, Please push F11 when you using GDI8001
+1, Please push F11 when you want to reset the GDI8001
 
 2, You'll get the first screen on the emulator!
