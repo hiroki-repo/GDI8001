@@ -733,6 +733,9 @@ bool blinkai2 = false;
 bool semigraphicenabled = false;
 int blinkwaitisti = 0;
 
+int lp_ggxy[2];
+bool mousemvenabled = false;
+
 void DrawGrp() {
     if ((graphicdraw == true) || (true)) {
         if (crtmodectrl == false) { SetPalette4emu(bgcolor); }
@@ -888,6 +891,9 @@ void ResetEmu() {
     rtcpos = 0;
 
     ioporte6h = 0;
+
+    mousemvenabled = false;
+
     Z80Init();
 }
 
@@ -1137,6 +1143,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
+    case WM_MOUSEMOVE:
+        if (mousemvenabled == false) { return 0; }
+    case WM_LBUTTONDOWN:
+        mousemvenabled = true;
+        RECT rw4rend;
+        if (bool4showwin) {
+            GetClientRect(hwnd4mw, &rw4rend);
+        }
+        else {
+            GetClientRect(HWNDfullscr, &rw4rend);
+        }
+        lp_ggxy[0] = (((((lParam >> (16 * 0)) & 0xFFFF) * (pc8001widthflag ? 80 : 40)) / rw4rend.right) + 6);
+        lp_ggxy[1] = ((((lParam >> (16 * 1)) & 0xFFFF) * (grpheight25 ? 25 : 20)) / rw4rend.bottom);
+        litepeninp = ((((vbi?1:0) << 7) | (lp_ggxy[0] & 127)) << 0) | ((lp_ggxy[1] & 63) << 8);
+        upd3301stat |= 1;
+        //rw4rend.right, rw4rend.bottom
+        break;
+    case WM_LBUTTONUP:
+        mousemvenabled = false;
+        break;
     case WM_KEYDOWN:
         if (wParam == 120) { 
             cmtreseted = true;
@@ -1146,7 +1172,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             //「ファイルを開く」ダイアログを表示
             uPD8251config[1] = 0x7;
             if (OpenDiaog(hWnd, "CMT File(*.cmt)\0*.cmt\0All Files(*.*)\0*.*\0\0",
-                FileName, OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY)) {
+                FileName, OFN_PATHMUSTEXIST | /*OFN_FILEMUSTEXIST | */OFN_HIDEREADONLY)) {
                 //MessageBoxA(0, FileName,"A", 0);
             }
             return 0; }
