@@ -145,7 +145,7 @@ HANDLE BGThreadid = 0;
 HANDLE RTIThreadid = 0;
 int clockcount = 0;
 bool videoenabled = false;
-bool beepenabled = false;
+bool beepenabled = true;
 uint8 uPD8251config[4];
 uint8 upd8251configate = 0;
 bool overrunerror = false;
@@ -801,7 +801,7 @@ void Drawbackground(LPVOID* arg4dbg) {
         }*/
         GetSystemTime(&st_st);
         DrawGrp();
-        GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < 16) { Sleep(16 - ststgoal16); }
+        GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < 17) { Sleep(17 - ststgoal16); }
         //Sleep(16);
     }
 }
@@ -811,7 +811,7 @@ void ResetEmu() {
 
     clockcount = 0;
     videoenabled = false;
-    beepenabled = false;
+    beepenabled = true;
     uPD8251config[0]=0;
     uPD8251config[1]=0;
     uPD8251config[2]=0;
