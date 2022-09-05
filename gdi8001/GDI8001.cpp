@@ -631,16 +631,16 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             ret = dmatc[1] >> (((dmachiocnt >> 3) & 1) * 8); dmachiocnt ^= (1 << 3); return ret;
             break;
         case 0x64:
-            ret = dmaas[0] >> (((dmachiocnt >> 4) & 1) * 8); dmachiocnt ^= (1 << 4); return ret;
+            ret = dmaas[2] >> (((dmachiocnt >> 4) & 1) * 8); dmachiocnt ^= (1 << 4); return ret;
             break;
         case 0x65:
-            ret = dmatc[0] >> (((dmachiocnt >> 5) & 1) * 8); dmachiocnt ^= (1 << 5); return ret;
+            ret = dmatc[2] >> (((dmachiocnt >> 5) & 1) * 8); dmachiocnt ^= (1 << 5); return ret;
             break;
         case 0x66:
-            ret = dmaas[1] >> (((dmachiocnt >> 6) & 1) * 8); dmachiocnt ^= (1 << 6); return ret;
+            ret = dmaas[3] >> (((dmachiocnt >> 6) & 1) * 8); dmachiocnt ^= (1 << 6); return ret;
             break;
         case 0x67:
-            ret = dmatc[1] >> (((dmachiocnt >> 7) & 1) * 8); dmachiocnt ^= (1 << 7); return ret;
+            ret = dmatc[3] >> (((dmachiocnt >> 7) & 1) * 8); dmachiocnt ^= (1 << 7); return ret;
             break;
         case 0x68:
             return dmamodestat | ((1 << 4) * ((clockcount % 19) > 9));
