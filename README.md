@@ -35,7 +35,7 @@ is a PC-8001 Emulator which rends graphic GDI only!
 
 CPU:Pentium 3 or more or ARMv7 or more
 
-GPU:The GPU only required ability of run the GDI only 3D Games at 60FPS so The GPU doesn't required!
+GPU:The GPU only required ability of run the GDI only 3D Games at 60FPS so The high spec GPU doesn't required!
 
 RAM: The emulator uses 2.1MB of the host memory
 
