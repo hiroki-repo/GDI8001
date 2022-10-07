@@ -33,7 +33,7 @@ is a PC-8001 Emulator which rends graphic GDI only!
 
 # Host computer minimum requirement
 
-CPU:Pentium 3 or more and ARMv7 or more
+CPU:Pentium 3 or more or ARMv7 or more
 
 GPU:The GPU should be run GDI only 3D Games at 60FPS so The GPU doesn't required!
 
