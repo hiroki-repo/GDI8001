@@ -30,3 +30,14 @@ is a PC-8001 Emulator which rends graphic GDI only!
 1, Please push F11 when you want to reset the GDI8001
 
 2, You'll get the first screen on the emulator!
+
+#Host computer minimum requirement
+
+CPU:Pentium 3 or more and ARMv7 or more
+
+GPU:The GPU should be run GDI only 3D Games at 60FPS so The GPU doesn't required!
+
+RAM: The emulator uses 2.1MB of the host memory
+
+OS:Windows vista or more and Wine on Unix compatibles or Android OS!
+
