@@ -31,7 +31,7 @@ is a PC-8001 Emulator which rends graphic GDI only!
 
 2, You'll get the first screen on the emulator!
 
-#Host computer minimum requirement
+# Host computer minimum requirement
 
 CPU:Pentium 3 or more and ARMv7 or more
 
