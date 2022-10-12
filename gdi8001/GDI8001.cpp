@@ -1193,10 +1193,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             ResetEmu();
             return 0;
         }
+		if (wParam == 37 || wParam == 40) {
+			pc8001kb1p = pc8001kmp[16];
+			if (pc8001kb1p != 255) { pc8001keybool[(pc8001kb1p >> 4) & 0xF] |= 1 << (pc8001kb1p & 0xF); }
+		}
         pc8001kb1p = pc8001kmp[wParam];
         if (pc8001kb1p!=255){ pc8001keybool[(pc8001kb1p >> 4) & 0xF] |= 1 << (pc8001kb1p & 0xF); }
         break;
     case WM_KEYUP:
+		if (wParam == 37 || wParam == 40) {
+			pc8001kb1p = pc8001kmp[16];
+			if (pc8001kb1p != 255) { pc8001keybool[(pc8001kb1p >> 4) & 0xF] &= ~(1 << (pc8001kb1p & 0xF)); }
+		}
         pc8001kb1p = pc8001kmp[wParam];
         if (pc8001kb1p != 255) { pc8001keybool[(pc8001kb1p >> 4) & 0xF] &= ~( 1 << (pc8001kb1p & 0xF) ); }
         break;
