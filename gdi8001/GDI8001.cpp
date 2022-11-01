@@ -116,7 +116,15 @@ typedef signed long int32;
 #ifdef _ARM_
 #pragma comment(lib,"bz80dll_arm.lib")
 #else
+#ifdef _M_ARM64
+#pragma comment(lib,"bz80dll_arm64.lib")
+#else
+#ifdef _M_AMD64
+#pragma comment(lib,"bz80dll_x64.lib")
+#else
 #pragma comment(lib,"bz80dll.lib")
+#endif
+#endif
 #endif
 extern "C" __declspec(dllimport) void setz80memaccess(int (*tmp)(int, int, int));
 extern "C" __declspec(dllimport) void Z80Init(void);
