@@ -162,7 +162,7 @@ uint8 crtc2 = 0;
 
 uint8 bgcolor = 0;
 bool colorgraphicmode = false;
-bool graphicdraw = false;
+bool graphicdraw = true;
 bool grpmode = false;
 bool romtype = false;
 
@@ -745,7 +745,7 @@ int lp_ggxy[2];
 bool mousemvenabled = false;
 
 void DrawGrp() {
-    if ((graphicdraw == true) || (true)) {
+    if ((graphicdraw == true)/* || (true)*/) {
         if (crtmodectrl == false) { SetPalette4emu(bgcolor); }
         else { SetPalette4emu(8); }
         SetBGCL();
@@ -834,7 +834,7 @@ void ResetEmu() {
 
     bgcolor = 0;
     colorgraphicmode = false;
-    graphicdraw = false;
+    graphicdraw = true;
     grpmode = false;
     romtype = false;
 
