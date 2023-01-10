@@ -713,7 +713,10 @@ void SetPset(int prm_0, int prm_1) {
     rs.right = (((prm_0 + 1) * xsiz10times) / 10);
     rs.bottom = (((prm_1 + 1) * ysiz10times) / 10);
     if (chkedbb8 == 1) {
-        HBRUSH hbkgtmp = CreateSolidBrush(GetPixel(hCDC, rs.left, rs.top)| GetBrushColor(hBackGround[color4draw]));
+        DWORD basecolor1 = GetPixel(hCDC, rs.left, rs.top);
+        DWORD basecolor2 = GetBrushColor(hBackGround[color4draw]);
+        if (basecolor1 == GetBrushColor(hBackGround[bgcolor])) { basecolor1 = basecolor2; }
+        HBRUSH hbkgtmp = CreateSolidBrush( ((( ((basecolor1 >> (8 * 0)) & 0xFF) + (( ((basecolor1 >> (8 * 0)) & 0xFF) - ((basecolor2 >> (8 * 0)) & 0xFF)) / 2)) & 0xFF) << (8 * 0)) | (((((basecolor1 >> (8 * 1)) & 0xFF) + ((((basecolor1 >> (8 * 1)) & 0xFF) - ((basecolor2 >> (8 * 1)) & 0xFF)) / 2)) & 0xFF) << (8 * 1)) | (((((basecolor1 >> (8 * 2)) & 0xFF) + ((((basecolor1 >> (8 * 2)) & 0xFF) - ((basecolor2 >> (8 * 2)) & 0xFF)) / 2)) & 0xFF) << (8 * 2)) );
         FillRect(hCDC, &rs, hbkgtmp);
         DeleteObject(hbkgtmp);
     }
@@ -728,7 +731,10 @@ void SetBox(int prm_0, int prm_1, int prm_2, int prm_3) {
     rs.right = (((prm_2 + 0) * xsiz10times) / 10);
     rs.bottom = (((prm_3 + 0) * ysiz10times) / 10);
     if (chkedbb8 == 1) {
-        HBRUSH hbkgtmp = CreateSolidBrush(GetPixel(hCDC, rs.left, rs.top) | GetBrushColor(hBackGround[color4draw]));
+        DWORD basecolor1 = GetPixel(hCDC, rs.left, rs.top);
+        DWORD basecolor2 = GetBrushColor(hBackGround[color4draw]);
+        if (basecolor1 == GetBrushColor(hBackGround[bgcolor])) { basecolor1 = basecolor2; }
+        HBRUSH hbkgtmp = CreateSolidBrush((((((basecolor1 >> (8 * 0)) & 0xFF) + ((((basecolor1 >> (8 * 0)) & 0xFF) - ((basecolor2 >> (8 * 0)) & 0xFF)) / 2)) & 0xFF) << (8 * 0)) | (((((basecolor1 >> (8 * 1)) & 0xFF) + ((((basecolor1 >> (8 * 1)) & 0xFF) - ((basecolor2 >> (8 * 1)) & 0xFF)) / 2)) & 0xFF) << (8 * 1)) | (((((basecolor1 >> (8 * 2)) & 0xFF) + ((((basecolor1 >> (8 * 2)) & 0xFF) - ((basecolor2 >> (8 * 2)) & 0xFF)) / 2)) & 0xFF) << (8 * 2)));
         FillRect(hCDC, &rs, hbkgtmp);
         DeleteObject(hbkgtmp);
     }
@@ -776,17 +782,17 @@ bool mousemvenabled = false;
 
 void DrawGrp() {
     if ((graphicdraw == true)/* || (true)*/) {
-        if (crtmodectrl == false) { SetPalette4emu(bgcolor); }
-        else { SetPalette4emu(8); }
+        if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); }
+        else { SetPalette4emu(32 + 8); }
         SetBGCL();
         for (chkedbb8 = 0; chkedbb8 < (((dmatc[2]&0x7FFF) >= 0xbb8) ? 2 : 1); chkedbb8++) {
             for (int drawbacky = 0; drawbacky < (grpheight25 ? 25 : 20); drawbacky++) {
                 for (int drawbackx = 0; drawbackx < (pc8001widthflag ? 80 : 40); drawbackx++) {
-                    uint8 char4show = z80memaccess(dmaas[2] + ((drawbackx * (pc8001widthflag ? 1 : 2)) + (drawbacky * 120)), 0, 1);
+                    uint8 char4show = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx * (pc8001widthflag ? 1 : 2)) + (drawbacky * 120)), 0, 1);
                     attributetmp = -1; attributeold = -1; fontcolors = 0; grpcolors = 0; attributegcold = false;
                     attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
                     for (int cnt = 0; cnt < 20; cnt++) {
-                        uint8 charattributetmp = z80memaccess(dmaas[2] + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((z80memaccess(dmaas[2] + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = z80memaccess(dmaas[2] + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (pc8001widthflag ? 1 : 2); if (attributetmp <= drawbackx && attributetmp > attributeold) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = z80memaccess(dmaas[2] + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (pc8001widthflag ? 1 : 2); if ((attributetmp3 <= drawbackx && attributetmp3 > attributeold3) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
+                        uint8 charattributetmp = z80memaccess(dmaas[2] + (chkedbb8*0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (pc8001widthflag ? 1 : 2); if (attributetmp <= drawbackx && attributetmp > attributeold) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (pc8001widthflag ? 1 : 2); if ((attributetmp3 <= drawbackx && attributetmp3 > attributeold3) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
                     }
                     if (semigraphicenabled == true) { charattribute |= 128; }
                     //grpcolors = 9;
@@ -1158,6 +1164,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
        else if ((cnt < 24) && (cnt > 15)) { hBackGround[cnt] = CreateSolidBrush(RGB(((cnt >> 1) & 1) * 230, ((cnt >> 2) & 1) * 230, ((cnt >> 0) & 1) * 230)); }
        else if (cnt == 24) { hBackGround[cnt] = CreateSolidBrush(RGB(0, 0, 0)); }
        else if (cnt == 25) { hBackGround[cnt] = CreateSolidBrush(RGB(230, 230, 230)); }
+       else if ((cnt > 31) && (cnt < 40)) { hBackGround[cnt] = CreateSolidBrush(RGB(((((cnt - 32) >> 1) & 1) * 253) + 1, ((((cnt - 32) >> 2) & 1) * 253) + 1, ((((cnt - 32) >> 0) & 1) * 253) + 1)); }
+       else if (cnt == 41) { hBackGround[cnt] = CreateSolidBrush(RGB(1, 1, 1)); }
+       else if (cnt == 42) { hBackGround[cnt] = CreateSolidBrush(RGB(253, 253, 253)); }
        else { hBackGround[cnt] = CreateSolidBrush(RGB(0, 0, 0)); }
    }
 
