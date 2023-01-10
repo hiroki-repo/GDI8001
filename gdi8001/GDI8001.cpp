@@ -786,8 +786,10 @@ void DrawGrp() {
         else { SetPalette4emu(32 + 8); }
         SetBGCL();
         for (chkedbb8 = 0; chkedbb8 < (((dmatc[2]&0x3FFF) >= 0xbb8) ? (((dmatc[2] & 0x3FFF) / 0xbb8) + 1) : 1); chkedbb8++) {
+            bool breakdowndgp = false;
             for (int drawbacky = 0; drawbacky < (grpheight25 ? 25 : 20); drawbacky++) {
                 for (int drawbackx = 0; drawbackx < (pc8001widthflag ? 80 : 40); drawbackx++) {
+                    if (((chkedbb8 * 0xbb8) + ((drawbackx * (pc8001widthflag ? 1 : 2)) + (drawbacky * 120))) > (dmatc[2] & 0x3FFF)) { breakdowndgp = true; break; }
                     uint8 char4show = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx * (pc8001widthflag ? 1 : 2)) + (drawbacky * 120)), 0, 1);
                     attributetmp = -1; attributeold = -1; fontcolors = 0; grpcolors = 0; attributegcold = false;
                     attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
@@ -823,7 +825,9 @@ void DrawGrp() {
                         if (charattribute & 16) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8), ((drawbacky + 0) * 8) + 0); }
                     }
                 }
+                if (breakdowndgp == true) { break; }
             }
+            if (breakdowndgp == true) { break; }
         }
     }
     else { SetPalette4emu(8); SetBGCL(); }
