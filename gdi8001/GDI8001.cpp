@@ -785,7 +785,7 @@ void DrawGrp() {
         if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); }
         else { SetPalette4emu(32 + 8); }
         SetBGCL();
-        for (chkedbb8 = 0; chkedbb8 < (((dmatc[2]&0x7FFF) >= 0xbb8) ? 2 : 1); chkedbb8++) {
+        for (chkedbb8 = 0; chkedbb8 < (((dmatc[2]&0x3FFF) >= 0xbb8) ? 2 : 1); chkedbb8++) {
             for (int drawbacky = 0; drawbacky < (grpheight25 ? 25 : 20); drawbacky++) {
                 for (int drawbackx = 0; drawbackx < (pc8001widthflag ? 80 : 40); drawbackx++) {
                     uint8 char4show = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx * (pc8001widthflag ? 1 : 2)) + (drawbacky * 120)), 0, 1);
