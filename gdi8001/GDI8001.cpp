@@ -208,6 +208,8 @@ HBITMAP hOldCBitmap;
 
 int pc8001kb1p;
 
+int chkedbb8 = 0;
+
 bool crtcldsclkenable = false;
 bool rtcclkenable = false;
 bool rtcstbenable = false;
@@ -667,6 +669,20 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
     else { return 0xff; }
 }
 
+COLORREF GetBrushColor(HBRUSH brush)
+{
+    LOGBRUSH lbr;
+    if (GetObject(brush, sizeof(lbr), &lbr) != sizeof(lbr)) {
+        // Not even a brush!
+        return CLR_NONE;
+    }
+    if (lbr.lbStyle != BS_SOLID) {
+        // Not a solid color brush.
+        return CLR_NONE;
+    }
+    return lbr.lbColor;
+}
+
 HWND hwnd4mw;
 
 uint8 z80irqid = 0;
@@ -696,7 +712,14 @@ void SetPset(int prm_0, int prm_1) {
     rs.top = (((prm_1 + 0) * ysiz10times) / 10);
     rs.right = (((prm_0 + 1) * xsiz10times) / 10);
     rs.bottom = (((prm_1 + 1) * ysiz10times) / 10);
-    FillRect(hCDC, &rs, hBackGround[color4draw]);
+    if (chkedbb8 == 1) {
+        HBRUSH hbkgtmp = CreateSolidBrush(GetPixel(hCDC, rs.left, rs.top)| GetBrushColor(hBackGround[color4draw]));
+        FillRect(hCDC, &rs, hbkgtmp);
+        DeleteObject(hbkgtmp);
+    }
+    else {
+        FillRect(hCDC, &rs, hBackGround[color4draw]);
+    }
 }
 void SetBox(int prm_0, int prm_1, int prm_2, int prm_3) {
     xsiz10times = pc8001widthflag ? 10 : 20; ysiz10times = grpheight25 ? 24 : 30;
@@ -704,7 +727,14 @@ void SetBox(int prm_0, int prm_1, int prm_2, int prm_3) {
     rs.top = (((prm_1 + 0) * ysiz10times) / 10);
     rs.right = (((prm_2 + 0) * xsiz10times) / 10);
     rs.bottom = (((prm_3 + 0) * ysiz10times) / 10);
-    FillRect(hCDC, &rs, hBackGround[color4draw]);
+    if (chkedbb8 == 1) {
+        HBRUSH hbkgtmp = CreateSolidBrush(GetPixel(hCDC, rs.left, rs.top) | GetBrushColor(hBackGround[color4draw]));
+        FillRect(hCDC, &rs, hbkgtmp);
+        DeleteObject(hbkgtmp);
+    }
+    else {
+        FillRect(hCDC, &rs, hBackGround[color4draw]);
+    }
 }
 
 void SetBGCL(){
@@ -749,41 +779,43 @@ void DrawGrp() {
         if (crtmodectrl == false) { SetPalette4emu(bgcolor); }
         else { SetPalette4emu(8); }
         SetBGCL();
-        for (int drawbacky = 0; drawbacky < (grpheight25 ? 25 : 20); drawbacky++) {
-            for (int drawbackx = 0; drawbackx < (pc8001widthflag ? 80 : 40); drawbackx++) {
-                uint8 char4show = z80memaccess(dmaas[2] + ((drawbackx * (pc8001widthflag ? 1 : 2)) + (drawbacky * 120)), 0, 1);
-                attributetmp = -1; attributeold = -1; fontcolors = 0; grpcolors = 0; attributegcold = false;
-                attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
-                for (int cnt = 0; cnt < 20; cnt++) {
-                    uint8 charattributetmp = z80memaccess(dmaas[2] + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((z80memaccess(dmaas[2] + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = z80memaccess(dmaas[2] + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (pc8001widthflag ? 1 : 2); if (attributetmp <= drawbackx && attributetmp > attributeold) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = z80memaccess(dmaas[2] + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (pc8001widthflag ? 1 : 2); if ((attributetmp3 <= drawbackx && attributetmp3 > attributeold3) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
-                }
-                if (semigraphicenabled == true) { charattribute |= 128; }
-                //grpcolors = 9;
-                if (charattribute & 4) { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
-                else { if (crtmodectrl == false) { SetPalette4emu(bgcolor); } else { SetPalette4emu(8); } }
-                if ((cursx != -1 && cursy != -1) && (cursx == (drawbackx * (pc8001widthflag ? 1 : 2)) && cursy == drawbacky)) {
-                    if (blinkai2 == false) {
-                        if (charattribute & 4) { if (crtmodectrl == false) { SetPalette4emu(bgcolor); } else { SetPalette4emu(8); } }
-                        else { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
-                        SetBox((((cursx / (pc8001widthflag ? 1 : 2)) + 0) * 8), ((cursy + 0) * 8), (((cursx / (pc8001widthflag ? 1 : 2)) + 1) * 8) - 0, ((cursy + 1) * 8) - 0);
+        for (chkedbb8 = 0; chkedbb8 < (((dmatc[2]&0x7FFF) >= 0xbb8) ? 2 : 1); chkedbb8++) {
+            for (int drawbacky = 0; drawbacky < (grpheight25 ? 25 : 20); drawbacky++) {
+                for (int drawbackx = 0; drawbackx < (pc8001widthflag ? 80 : 40); drawbackx++) {
+                    uint8 char4show = z80memaccess(dmaas[2] + ((drawbackx * (pc8001widthflag ? 1 : 2)) + (drawbacky * 120)), 0, 1);
+                    attributetmp = -1; attributeold = -1; fontcolors = 0; grpcolors = 0; attributegcold = false;
+                    attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
+                    for (int cnt = 0; cnt < 20; cnt++) {
+                        uint8 charattributetmp = z80memaccess(dmaas[2] + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((z80memaccess(dmaas[2] + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = z80memaccess(dmaas[2] + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (pc8001widthflag ? 1 : 2); if (attributetmp <= drawbackx && attributetmp > attributeold) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = z80memaccess(dmaas[2] + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (pc8001widthflag ? 1 : 2); if ((attributetmp3 <= drawbackx && attributetmp3 > attributeold3) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
                     }
-                }
-                if (((blinkai == false) || ((charattribute & 2) == 0)) && ((charattribute & 1) == 0)) {
-                    SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
-                    if ((cursx == (drawbackx * (pc8001widthflag ? 1 : 2)) && cursy == drawbacky) && (blinkai2 == false)) {
-                        if (charattribute & 4) { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
-                        else { if (crtmodectrl == false) { SetPalette4emu(bgcolor); } else { SetPalette4emu(8); } }
+                    if (semigraphicenabled == true) { charattribute |= 128; }
+                    //grpcolors = 9;
+                    if (charattribute & 4) { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
+                    else { if (crtmodectrl == false) { SetPalette4emu(bgcolor); } else { SetPalette4emu(8); } }
+                    if ((cursx != -1 && cursy != -1) && (cursx == (drawbackx * (pc8001widthflag ? 1 : 2)) && cursy == drawbacky)) {
+                        if (blinkai2 == false) {
+                            if (charattribute & 4) { if (crtmodectrl == false) { SetPalette4emu(bgcolor); } else { SetPalette4emu(8); } }
+                            else { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
+                            SetBox((((cursx / (pc8001widthflag ? 1 : 2)) + 0) * 8), ((cursy + 0) * 8), (((cursx / (pc8001widthflag ? 1 : 2)) + 1) * 8) - 0, ((cursy + 1) * 8) - 0);
+                        }
                     }
-                    else {
-                        if (charattribute & 4) { if (crtmodectrl == false) { SetPalette4emu(bgcolor); } else { SetPalette4emu(8); } }
-                        else { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
+                    if (((blinkai == false) || ((charattribute & 2) == 0)) && ((charattribute & 1) == 0)) {
+                        SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
+                        if ((cursx == (drawbackx * (pc8001widthflag ? 1 : 2)) && cursy == drawbacky) && (blinkai2 == false)) {
+                            if (charattribute & 4) { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
+                            else { if (crtmodectrl == false) { SetPalette4emu(bgcolor); } else { SetPalette4emu(8); } }
+                        }
+                        else {
+                            if (charattribute & 4) { if (crtmodectrl == false) { SetPalette4emu(bgcolor); } else { SetPalette4emu(8); } }
+                            else { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
+                        }
+                        if ((charattribute & 128) || (attributegcold == true)) { for (int cnt = 0; cnt < 8; cnt++) { if ((char4show >> cnt) & 1) { SetBox(((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 0)) - 0, ((drawbacky + 0) * 8) + (2 * ((cnt % 4) + 0)) - 0, ((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 1)) - 0, ((drawbacky + 0) * 8) + (2 * ((cnt % 4) + 1)) - 0); } } }
+                        else { DrawFont(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), char4show); }
+                        //SetPalette4emu(9); SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
+                        if (charattribute & 64) { SetBox(((drawbackx + 0) * 8) + 3, ((drawbacky + 0) * 8), ((drawbackx + 0) * 8) + 4, ((drawbacky + 1) * 8) - 0); }
+                        if (charattribute & 32) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 1) * 8) - 2, ((drawbackx + 1) * 8), ((drawbacky + 1) * 8) - 0); }
+                        if (charattribute & 16) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8), ((drawbacky + 0) * 8) + 0); }
                     }
-                    if ((charattribute & 128) || (attributegcold == true)) { for (int cnt = 0; cnt < 8; cnt++) { if ((char4show >> cnt) & 1) { SetBox(((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 0)) - 0, ((drawbacky + 0) * 8) + (2 * ((cnt % 4) + 0)) - 0, ((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 1)) - 0, ((drawbacky + 0) * 8) + (2 * ((cnt % 4) + 1)) - 0); } } }
-                    else { DrawFont(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), char4show); }
-                    //SetPalette4emu(9); SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
-                    if (charattribute & 64) { SetBox(((drawbackx + 0) * 8) + 3, ((drawbacky + 0) * 8), ((drawbackx + 0) * 8) + 4, ((drawbacky + 1) * 8) - 0); }
-                    if (charattribute & 32) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 1) * 8) - 2, ((drawbackx + 1) * 8), ((drawbacky + 1) * 8) - 0); }
-                    if (charattribute & 16) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8), ((drawbacky + 0) * 8) + 0); }
                 }
             }
         }
