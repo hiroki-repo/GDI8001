@@ -735,8 +735,9 @@ UINT8 prevchar[256];
 void SetPalette4emu(int prm_0) { color4draw = prm_0+(greenmonitor?128:0); }
 
 void SetPset(int prm_0, int prm_1) {
+    xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 240 : 300;
     //xsiz10times = pc8001widthflag ? 10 : 20; ysiz10times = grpheight25 ? 24 : 30;
-    xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 213 : 267;
+    //xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 213 : 267;
     //xsiz10times = 10; ysiz10times = 10;
     rs.left = (((prm_0 + 0) * xsiz10times) / 100);
     rs.top = (((prm_1 + 0) * ysiz10times) / 100);
@@ -755,8 +756,9 @@ void SetPset(int prm_0, int prm_1) {
     }
 }
 void SetBox(int prm_0, int prm_1, int prm_2, int prm_3) {
+    xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 240 : 300;
     //xsiz10times = pc8001widthflag ? 10 : 20; ysiz10times = grpheight25 ? 24 : 30;
-    xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 213 : 267;
+    //xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 213 : 267;
     //xsiz10times = 10; ysiz10times = 10;
     rs.left = (((prm_0 + 0) * xsiz10times) / 100);
     rs.top = (((prm_1 + 0) * ysiz10times) / 100);
@@ -843,11 +845,11 @@ void DrawGrp() {
                         if (blinkai2 == false) {
                             if (charattribute & 4) { if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); } else { SetPalette4emu(32 + 8); } }
                             else { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
-                            SetBox((((cursx / (pc8001widthflag ? 1 : 2)) + 0) * 8), ((cursy + 0) * 9), (((cursx / (pc8001widthflag ? 1 : 2)) + 1) * 8) - 0, ((cursy + 1) * 9) - 0);
+                            SetBox((((cursx / (pc8001widthflag ? 1 : 2)) + 0) * 8), ((cursy + 0) * 8), (((cursx / (pc8001widthflag ? 1 : 2)) + 1) * 8) - 0, ((cursy + 1) * 8) - 0);
                         }
                     }
                     if (((blinkai == false) || ((charattribute & 2) == 0)) && ((charattribute & 1) == 0)) {
-                        SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 9), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 9) - 0);
+                        SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
                         if ((cursx == (drawbackx * (pc8001widthflag ? 1 : 2)) && cursy == drawbacky) && (blinkai2 == false)) {
                             if (charattribute & 4) { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
                             else { if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); } else { SetPalette4emu(32 + 8); } }
@@ -856,12 +858,12 @@ void DrawGrp() {
                             if (charattribute & 4) { if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); } else { SetPalette4emu(32 + 8); } }
                             else { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
                         }
-                        if ((charattribute & 128) || (attributegcold == true)) { for (int cnt = 0; cnt < 8; cnt++) { if ((char4show >> cnt) & 1) { SetBox(((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 0)) - 0, ((drawbacky + 0) * 9) + ((int)(2.5 * ((cnt % 4) + 0))) - 0, ((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 1)) - 0, ((drawbacky + 0) * 9) + ((int)(2.5 * ((cnt % 4) + 1))) - 0); } } }
-                        else { DrawFontUS(((drawbackx + 0) * 8), ((drawbacky + 0) * 9), char4show, prevchar[drawbackx]); DrawFont(((drawbackx + 0) * 8), ((drawbacky + 0) * 9), char4show); prevchar[drawbackx] = char4show; }
+                        if ((charattribute & 128) || (attributegcold == true)) { for (int cnt = 0; cnt < 8; cnt++) { if ((char4show >> cnt) & 1) { SetBox(((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 0)) - 0, ((drawbacky + 0) * 8) + ((int)(2 * ((cnt % 4) + 0))) - 0, ((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 1)) - 0, ((drawbacky + 0) * 8) + ((int)(2 * ((cnt % 4) + 1))) - 0); } } }
+                        else { /*DrawFontUS(((drawbackx + 0) * 8), ((drawbacky + 0) * 9), char4show, prevchar[drawbackx]);*/ DrawFont(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), char4show); prevchar[drawbackx] = char4show; }
                         //SetPalette4emu(9); SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
-                        if (charattribute & 64) { SetBox(((drawbackx + 0) * 8) + 3, ((drawbacky + 0) * 9), ((drawbackx + 0) * 8) + 4, ((drawbacky + 1) * 9) - 0); }
-                        if (charattribute & 32) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 1) * 9) - 2, ((drawbackx + 1) * 8), ((drawbacky + 1) * 9) - 1); }
-                        if (charattribute & 16) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 9), ((drawbackx + 1) * 8), ((drawbacky + 0) * 9) + 0); }
+                        if (charattribute & 64) { SetBox(((drawbackx + 0) * 8) + 3, ((drawbacky + 0) * 8), ((drawbackx + 0) * 8) + 4, ((drawbacky + 1) * 8) - 0); }
+                        if (charattribute & 32) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 1) * 8) - 2, ((drawbackx + 1) * 8), ((drawbacky + 1) * 8) - 1); }
+                        if (charattribute & 16) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8), ((drawbacky + 0) * 8) + 0); }
                     }
                 }
                 if (breakdowndgp == true) { break; }
