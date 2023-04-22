@@ -12,7 +12,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include <shobjidl_core.h>
+//#include <shobjidl_core.h>
+#include <CommCtrl.h>
 
 HWND HWNDfullscr;
 

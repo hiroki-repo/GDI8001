@@ -11,6 +11,10 @@ Global
 		Debug|ARM64 = Debug|ARM64
 		Debug|x64 = Debug|x64
 		Debug|x86 = Debug|x86
+		Release(xp)|ARM = Release(xp)|ARM
+		Release(xp)|ARM64 = Release(xp)|ARM64
+		Release(xp)|x64 = Release(xp)|x64
+		Release(xp)|x86 = Release(xp)|x86
 		Release|ARM = Release|ARM
 		Release|ARM64 = Release|ARM64
 		Release|x64 = Release|x64
@@ -25,6 +29,14 @@ Global
 		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Debug|x64.Build.0 = Debug|x64
 		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Debug|x86.ActiveCfg = Debug|Win32
 		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Debug|x86.Build.0 = Debug|Win32
+		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Release(xp)|ARM.ActiveCfg = Release(xp)|ARM
+		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Release(xp)|ARM.Build.0 = Release(xp)|ARM
+		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Release(xp)|ARM64.ActiveCfg = Release(xp)|ARM64
+		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Release(xp)|ARM64.Build.0 = Release(xp)|ARM64
+		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Release(xp)|x64.ActiveCfg = Release(xp)|x64
+		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Release(xp)|x64.Build.0 = Release(xp)|x64
+		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Release(xp)|x86.ActiveCfg = Release(xp)|Win32
+		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Release(xp)|x86.Build.0 = Release(xp)|Win32
 		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Release|ARM.ActiveCfg = Release|ARM
 		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Release|ARM.Build.0 = Release|ARM
 		{71BDFAF6-3C0C-42EB-9A9F-F75A69FE16A1}.Release|ARM64.ActiveCfg = Release|ARM64
