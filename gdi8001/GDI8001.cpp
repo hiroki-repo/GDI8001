@@ -873,8 +873,8 @@ void DrawGrp() {
         }
     }
     else { SetPalette4emu(8); SetBGCL(); }
-    if (blinkingtime == blinkwaitisti) { blinkai2 = blinkai2 ? false : true; }
-    if ((blinkingtime * 2) <= blinkwaitisti) { blinkai = blinkai ? false : true; blinkwaitisti = 0; }
+    if (((blinkingtime * 1) * 9) == blinkwaitisti) { blinkai2 = blinkai2 ? false : true; }
+    if (((blinkingtime * 2) * 9) <= blinkwaitisti) { blinkai = blinkai ? false : true; blinkwaitisti = 0; }
     blinkwaitisti++;
 #if 0
     SetStretchBltMode(hCDC, (isharftoneenabled ? STRETCH_HALFTONE : COLORONCOLOR));
