@@ -942,6 +942,15 @@ void DrawGrp() {
                             SetPalette4emu(32 + 8);
                             SetBox2(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
                         }
+                        else if (fullgrpmode == false && colorfullgraphicmode == false) {
+                            if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); }
+                            else { SetPalette4emu(32 + 8); }
+                            SetBox2(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
+                        }
+                        else if (colorfullgraphicmode == true){
+                            SetPalette4emu((fullgrpmode ? 1 : 0));
+                            SetBox2(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
+                        }
                         for (int cnt2 = 0; cnt2 < 8; cnt2++) {
                             for (int cnt = 0; cnt < 8; cnt++) {
                                 if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); }
@@ -957,6 +966,7 @@ void DrawGrp() {
                                         }
                                         SetPset2((drawbackx * 8) + cnt, (drawbacky * 8) + cnt2);
                                     }
+#if 0
                                     else {
                                         if (fullgrpmode == false) {
                                             if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); }
@@ -964,14 +974,17 @@ void DrawGrp() {
                                             SetPset2((drawbackx * 8) + cnt, (drawbacky * 8) + cnt2);
                                         }
                                     }
+#endif
                                 }
                                 else {
                                     UINT8 colortmp = (((gvram[0][(((drawbackx * 2) + (((drawbacky * 8) + cnt2) * 80))) + ((cnt % 8) / 4)] << (((cnt % 8) % 4) * 2)) & 192) >> 6) & 3;
-                                    if (colortmp <= 2) {
-                                        if (crtmodectrl == false) { SetPalette4emu((colortmp * 2) | (fullgrpmode ? 1 : 0)); }
-                                        else { SetPalette4emu(9); }
+                                    if (colortmp != 0) {
+                                        if (colortmp <= 2) {
+                                            if (crtmodectrl == false) { SetPalette4emu((colortmp * 2) | (fullgrpmode ? 1 : 0)); }
+                                            else { SetPalette4emu(9); }
+                                        }
+                                        SetPset2((drawbackx * 8) + cnt, (drawbacky * 8) + cnt2);
                                     }
-                                    SetPset2((drawbackx * 8) + cnt, (drawbacky * 8) + cnt2);
                                 }
                             }
                         }
