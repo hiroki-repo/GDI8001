@@ -962,7 +962,7 @@ void DrawGrp() {
                                             else { SetPalette4emu(32 + 9); }
                                         }
                                         else {
-                                            SetPalette4emu(32 + 8);
+                                            SetPalette4emu(32 + bgcolor);
                                         }
                                         SetPset2((drawbackx * 8) + cnt, (drawbacky * 8) + cnt2);
                                     }
