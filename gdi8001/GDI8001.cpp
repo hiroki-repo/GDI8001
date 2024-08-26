@@ -980,8 +980,7 @@ void DrawGrp() {
                                     UINT8 colortmp = (((gvram[0][(((drawbackx * 2) + (((drawbacky * 8) + cnt2) * 80))) + ((cnt % 8) / 4)] << (((cnt % 8) % 4) * 2)) & 192) >> 6) & 3;
                                     if (colortmp != 0) {
                                         if (colortmp <= 2) {
-                                            if (crtmodectrl == false) { SetPalette4emu((colortmp * 2) | (fullgrpmode ? 1 : 0)); }
-                                            else { SetPalette4emu(9); }
+                                            SetPalette4emu((colortmp * 2) | (fullgrpmode ? 1 : 0));
                                         }
                                         SetPset2((drawbackx * 8) + cnt, (drawbacky * 8) + cnt2);
                                     }
