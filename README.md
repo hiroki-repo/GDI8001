@@ -6,7 +6,7 @@ is a PC-8001 Emulator which rends graphic GDI only!
 
 2, Extract the zip file that downloaded now!
 
-3, Please put firmware files PC-8001 font as "font.rom" and PC-8001 BASIC as "n80basic.rom" to GDI8001-main folder! If you wanted to use PC-8001 mkII files please put the firmware 32k or 24k basic firmware as "nbasic.rom" and "n80.rom" for the 8k firmware if using 24k mkII nbasic rom and 32k file user not necessary to put "n80.rom"!
+3, Please put firmware files PC-8001 font as "font.rom" and PC-8001 BASIC as "n80basic.rom" to GDI8001-main folder! If you wanted to use PC-8001 mkII files please put the firmware 32k or 24k basic firmware as "nbasic.rom", and the 8k firmware as "n80.rom" if using 24k mkII nbasic rom and 32k file user not necessary to put "n80.rom"!
 
 4, Run "GDI8001.exe"
 
