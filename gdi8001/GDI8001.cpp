@@ -1450,8 +1450,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
        else if (cnt == 24) { hBackGround[cnt] = CreateSolidBrush(RGB(0, 0, 0)); }
        else if (cnt == 25) { hBackGround[cnt] = CreateSolidBrush(RGB(230, 230, 230)); }
        else if ((cnt > 31) && (cnt < 40)) { hBackGround[cnt] = CreateSolidBrush(RGB(((((cnt - 32) >> 1) & 1) * 253) + 1, ((((cnt - 32) >> 2) & 1) * 253) + 1, ((((cnt - 32) >> 0) & 1) * 253) + 1)); }
-       else if (cnt == 41) { hBackGround[cnt] = CreateSolidBrush(RGB(1, 1, 1)); }
-       else if (cnt == 42) { hBackGround[cnt] = CreateSolidBrush(RGB(253, 253, 253)); }
+       else if (cnt == 40) { hBackGround[cnt] = CreateSolidBrush(RGB(1, 1, 1)); }
+       else if (cnt == 41) { hBackGround[cnt] = CreateSolidBrush(RGB(253, 253, 253)); }
        else if ((cnt >= (0 + 128)) && (cnt < (8 + 128))) { hBackGround[cnt] = CreateSolidBrush(RGB(0,((cnt - (0 + 127))*28)+3,0)); }
        else if (cnt == (8 + 128)) { hBackGround[cnt] = CreateSolidBrush(RGB(0, 31, 0)); }
        else if (cnt == (9 + 128)) { hBackGround[cnt] = CreateSolidBrush(RGB(0, 255, 0)); }
@@ -1459,8 +1459,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
        else if (cnt == (24 + 128)) { hBackGround[cnt] = CreateSolidBrush(RGB(0, 30, 0)); }
        else if (cnt == (25 + 128)) { hBackGround[cnt] = CreateSolidBrush(RGB(0, 230, 0)); }
        else if ((cnt > (31 + 128)) && (cnt < (40 + 128))) { hBackGround[cnt] = CreateSolidBrush(RGB(1, ((cnt - (32 + 127)) * 28) + 1, 1)); }
-       else if (cnt == (41 + 128)) { hBackGround[cnt] = CreateSolidBrush(RGB(1, 28 + 1, 1)); }
-       else if (cnt == (42 + 128)) { hBackGround[cnt] = CreateSolidBrush(RGB(0, 253, 0)); }
+       else if (cnt == (40 + 128)) { hBackGround[cnt] = CreateSolidBrush(RGB(1, 28 + 1, 1)); }
+       else if (cnt == (41 + 128)) { hBackGround[cnt] = CreateSolidBrush(RGB(0, 253, 0)); }
        else if (cnt < 128) { hBackGround[cnt] = CreateSolidBrush(RGB(0, 0, 0)); }
        else { hBackGround[cnt] = CreateSolidBrush(RGB(0, 33, 0)); }
    }
@@ -1579,6 +1579,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
             case ID_DIPSW_N80:
                 crtc2 ^= 1;
+                break;
+            case ID_32778:
+                cmtreseted = true;
+                cmtdatard = true;
+                //初期化(これをしないとごみが入る)
+                ZeroMemory(FileName, MAX_PATH * 2);
+                //「ファイルを開く」ダイアログを表示
+                uPD8251config[1] = 0x7;
+                if (OpenDiaog(hWnd, "CMT File(*.cmt)\0*.cmt\0All Files(*.*)\0*.*\0\0",
+                    FileName, OFN_PATHMUSTEXIST | /*OFN_FILEMUSTEXIST | */OFN_HIDEREADONLY)) {
+                    //MessageBoxA(0, FileName,"A", 0);
+                }
+                break;
+            case ID_32779:
+                memcpy(FileName,"\\\\.\\COM1",9);
                 break;
             default:
                 return DefWindowProc(hWnd, message, wParam, lParam);
