@@ -17,3 +17,8 @@ BOOL APIENTRY DllMain( HMODULE hModule,
     return TRUE;
 }
 
+
+EXTERN_C BOOL WINAPI _imp__IsDebuggerPresent(void)
+{
+  return FALSE;
+}

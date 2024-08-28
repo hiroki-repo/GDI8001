@@ -1640,3 +1640,9 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
     }
     return (INT_PTR)FALSE;
 }
+
+
+EXTERN_C BOOL WINAPI _imp__IsDebuggerPresent(void)
+{
+  return FALSE;
+}
