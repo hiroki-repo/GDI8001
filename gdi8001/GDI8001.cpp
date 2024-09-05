@@ -233,6 +233,8 @@ bool isharftoneenabled = false;
 
 bool n80_8000 = false;
 
+bool ttyconnected = false;
+
 tm* timexforch1;
 tm timezforch1;
 time_t timerforch123;
@@ -591,8 +593,11 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x2C:
         case 0x2E:
             //MessageBoxA(0, "A", "A", 0);
-            if (cmtreseted == true) { cmtreseted = false; cmtseek = 0; return 0xff; }
-            else { cmtfile = fopen(FileName, "rb"); if (cmtfile != 0) { struct _stat buf; int result = _stat(FileName, &buf); if (buf.st_size <= cmtseek) { cmtseek = 0; fclose(cmtfile); return 0xFF; } fseek(cmtfile, cmtseek++, SEEK_SET); ret = fgetc(cmtfile); fclose(cmtfile); return ret; } else { return 0xff; } }
+            if (ttyconnected == false) {
+                if (cmtreseted == true) { cmtreseted = false; cmtseek = 0; return 0xff; }
+                else { cmtfile = fopen(FileName, "rb"); if (cmtfile != 0) { struct _stat buf; int result = _stat(FileName, &buf); if (buf.st_size <= cmtseek) { cmtseek = 0; fclose(cmtfile); return 0xFF; } fseek(cmtfile, cmtseek++, SEEK_SET); ret = fgetc(cmtfile); fclose(cmtfile); return ret; } else { return 0xff; } }
+            }
+            else { cmtfile = fopen(FileName, "rb"); ret = fgetc(cmtfile); fclose(cmtfile); return ret; }
             return 0xff;
             //if (uPD8251config[3] & 4) { if (cmtreseted == true) { cmtreseted = false; cmtseek = 0; return 0xff; } else { cmtfile = fopen(FileName, "rb"); if (cmtfile != 0) { fseek(cmtfile, cmtseek++, SEEK_SET); ret = fgetc(cmtfile); fclose(cmtfile); return ret; } } }
             return uPD8251config[2];
@@ -913,6 +918,8 @@ int blinkwaitisti = 0;
 int lp_ggxy[2];
 bool mousemvenabled = false;
 
+uint8 graphiccodes[(80*25)][2];
+
 void DrawGrp() {
     if ((graphicdraw == true)/* || (true)*/) {
         if (colorfullgraphicmode == false && fullgrpmode == false) {
@@ -926,17 +933,35 @@ void DrawGrp() {
         for (chkedbb8 = 0; chkedbb8 < (((dmatc[2]&0x3FFF) >= 0xbb8) ? (((dmatc[2] & 0x3FFF) / 0xbb8) + 1) : 1); chkedbb8++) {
             bool breakdowndgp = false;
 
+            for (int drawbacky = 0; drawbacky < 25; drawbacky++) {
+                for (int drawbackx = 0; drawbackx < 80; drawbackx++) {
+                    uint8 char4show = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx)+(drawbacky * 120)), 0, 1);
+                    attributetmp = -1; attributeold = -1; fontcolors = 0; grpcolors = 0; attributegcold = false;
+                    attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
+                    for (int cnt = 0; cnt < 20; cnt++) {
+                        uint8 charattributetmp = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if (attributetmp <= drawbackx && attributetmp > attributeold) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if ((attributetmp3 <= drawbackx && attributetmp3 > attributeold3) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
+                    }
+                    if (semigraphicenabled == true) { charattribute |= 128; }
+                    graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute;
+                    graphiccodes[(80 * drawbacky) + drawbackx][1] = grpcolors;
+                }
+            }
         if (fullgraphicdraw == true) {
+
             for (int drawbacky = 0; drawbacky < 25; drawbacky++) {
                 for (int drawbackx = 0; drawbackx < (colorfullgraphicmode ? 40 : 80); drawbackx++) {
                     //if (((chkedbb8 * 0xbb8) + ((drawbackx * (colorfullgraphicmode ? 2 : 1)) + (drawbacky * 120))) > (dmatc[2] & 0x3FFF)) { breakdowndgp = true; break; }
                     uint8 char4show = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx * (colorfullgraphicmode ? 2 : 1)) + (drawbacky * 120)), 0, 1);
+#if 0
                     attributetmp = -1; attributeold = -1; fontcolors = 0; grpcolors = 0; attributegcold = false;
                     attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
                     for (int cnt = 0; cnt < 20; cnt++) {
                         uint8 charattributetmp = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (colorfullgraphicmode ? 2 : 1); if (attributetmp <= drawbackx && attributetmp > attributeold) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (colorfullgraphicmode ? 2 : 1); if ((attributetmp3 <= drawbackx && attributetmp3 > attributeold3) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
                     }
                     if (semigraphicenabled == true) { charattribute |= 128; }
+#endif
+                    charattribute = graphiccodes[(80 * drawbacky) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][0];
+                    fontcolors = graphiccodes[(80 * drawbacky) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][1] & 7; grpcolors = graphiccodes[(80 * drawbacky) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][1] & 7;
                     //grpcolors = 9;
                         if (fullgrpmode == true && colorfullgraphicmode == false) {
                             SetPalette4emu(32 + 8);
@@ -997,12 +1022,17 @@ void DrawGrp() {
                 for (int drawbackx = 0; drawbackx < (pc8001widthflag ? 80 : 40); drawbackx++) {
                     if (((chkedbb8 * 0xbb8) + ((drawbackx * (pc8001widthflag ? 1 : 2)) + (drawbacky * 120))) > (dmatc[2] & 0x3FFF)) { breakdowndgp = true; break; }
                     uint8 char4show = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx * (pc8001widthflag ? 1 : 2)) + (drawbacky * 120)), 0, 1);
+#if 0
                     attributetmp = -1; attributeold = -1; fontcolors = 0; grpcolors = 0; attributegcold = false;
                     attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
                     for (int cnt = 0; cnt < 20; cnt++) {
                         uint8 charattributetmp = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (pc8001widthflag ? 1 : 2); if (attributetmp <= drawbackx && attributetmp > attributeold) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = z80memaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (pc8001widthflag ? 1 : 2); if ((attributetmp3 <= drawbackx && attributetmp3 > attributeold3) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
                     }
                     if (semigraphicenabled == true) { charattribute |= 128; }
+#endif
+                    attributegcold = false;
+                    charattribute = graphiccodes[(80 * drawbacky) + (drawbackx * (pc8001widthflag ? 1 : 2))][0];
+                    fontcolors = graphiccodes[(80 * drawbacky) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7; grpcolors = graphiccodes[(80 * drawbacky) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7;
 #if 0
                     if (charattribute & 4) { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
                     else { if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); } else { SetPalette4emu(32 + 8); } }
@@ -1514,6 +1544,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         if (wParam == 120) { 
             cmtreseted = true;
             cmtdatard = true;
+            ttyconnected = false;
             //初期化(これをしないとごみが入る)
             ZeroMemory(FileName, MAX_PATH * 2);
             //「ファイルを開く」ダイアログを表示
@@ -1583,6 +1614,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case ID_32778:
                 cmtreseted = true;
                 cmtdatard = true;
+                ttyconnected = false;
                 //初期化(これをしないとごみが入る)
                 ZeroMemory(FileName, MAX_PATH * 2);
                 //「ファイルを開く」ダイアログを表示
@@ -1593,7 +1625,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
                 break;
             case ID_32779:
+                cmtreseted = false;
+                cmtdatard = false;
+                ttyconnected = true;
                 memcpy(FileName,"\\\\.\\COM1",9);
+                break;
+            case ID_32780:
+                ResetEmu();
                 break;
             default:
                 return DefWindowProc(hWnd, message, wParam, lParam);
