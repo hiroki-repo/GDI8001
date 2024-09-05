@@ -413,7 +413,10 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x2A:
         case 0x2C:
         case 0x2E:
-            cmtfile = fopen(FileName, "ab"); if (cmtfile != 0) { fputc(prm_1, cmtfile); fclose(cmtfile); }
+            if (ttyconnected == false) {
+                cmtfile = fopen(FileName, "ab"); if (cmtfile != 0) { fputc(prm_1, cmtfile); fclose(cmtfile); }
+            }
+            else { if (cmtfileloc != 0) { serialcharw[0] = prm_1; WriteFile(cmtfileloc, &serialcharw, 1, 0, 0); } }
             //if (uPD8251config[3] & 1) { cmtfile = fopen(FileName, "ab"); if (cmtfile != 0) { fputc(prm_1, cmtfile); fclose(cmtfile); } }
             break;
         case 0x21:
@@ -778,7 +781,7 @@ void RTIService(LPVOID* arg4rtisv) { while (true) { if (ioporte6h & 1) { Z80INT(
 void __stdcall serialdaemon(void* prm_0) {
     COMSTAT tempcomstate;
     while (true) {
-        if (ttyconnected == true) { if (rxdataready == false) { cmtfileloc = CreateFileA(FileName, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0); ClearCommError(cmtfileloc, 0, &tempcomstate); if (tempcomstate.cbInQue != 0) { ReadFile(cmtfileloc, &serialchar, 1, 0, 0); rxdataready = true; } CloseHandle(cmtfileloc); cmtfileloc = 0; serialstat = true; } }
+        if (ttyconnected == true) { if (rxdataready == false) { if (cmtfileloc != 0) { ClearCommError(cmtfileloc, 0, &tempcomstate); if (tempcomstate.cbInQue != 0) { ReadFile(cmtfileloc, &serialchar, 1, 0, 0); rxdataready = true; } } serialstat = true; } }
     }
 }
 
@@ -1586,6 +1589,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 FileName, OFN_PATHMUSTEXIST | /*OFN_FILEMUSTEXIST | */OFN_HIDEREADONLY)) {
                 //MessageBoxA(0, FileName,"A", 0);
             }
+            if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
             return 0; }
         if (wParam == 123) {
             if (bool4showwin) {
@@ -1658,13 +1662,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     FileName, OFN_PATHMUSTEXIST | /*OFN_FILEMUSTEXIST | */OFN_HIDEREADONLY)) {
                     //MessageBoxA(0, FileName,"A", 0);
                 }
+                if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
                 break;
             case ID_32779:
                 if (ttyconnected == false) {
                     cmtreseted = true;
                     cmtdatard = true;
                     if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
-                    //cmtfileloc = CreateFileA("\\\\.\\COM1", GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+                    cmtfileloc = CreateFileA("\\\\.\\COM1", GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
                     memcpy(FileName, "\\\\.\\COM1", 9);
                     serialstat = false;
                     serialstatw = true;
