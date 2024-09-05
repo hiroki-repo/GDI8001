@@ -154,6 +154,8 @@ HANDLE Z80Threadid = 0;
 HANDLE BSThreadid = 0;
 HANDLE BGThreadid = 0;
 HANDLE RTIThreadid = 0;
+HANDLE SERThreadid = 0;
+HANDLE SERWThreadid = 0;
 int clockcount = 0;
 bool videoenabled = false;
 bool beepenabled = true;
@@ -340,6 +342,24 @@ HBITMAP hbOld;
 HDC hdcb;
 
 DWORD palette32[256];
+
+UINT8 serialchar[64];
+UINT8 serialcharw[64];
+bool serialstat = true;
+bool serialstatw = true;
+
+HANDLE cmtfileloc = 0;
+
+void __stdcall serialdaemonx(void* prm_0) {
+    while (true) {
+        if (ttyconnected == true) {
+            if (serialstatw == false) {
+                WriteFile(cmtfileloc, &serialcharw, 1, 0, 0);
+                serialstatw = true;
+            }
+        }
+    }
+}
 
 int z80memaccess(int prm_0, int prm_1, int prm_2) {
     switch (prm_2){
@@ -597,7 +617,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
                 if (cmtreseted == true) { cmtreseted = false; cmtseek = 0; return 0xff; }
                 else { cmtfile = fopen(FileName, "rb"); if (cmtfile != 0) { struct _stat buf; int result = _stat(FileName, &buf); if (buf.st_size <= cmtseek) { cmtseek = 0; fclose(cmtfile); return 0xFF; } fseek(cmtfile, cmtseek++, SEEK_SET); ret = fgetc(cmtfile); fclose(cmtfile); return ret; } else { return 0xff; } }
             }
-            else { cmtfile = fopen(FileName, "rb"); ret = fgetc(cmtfile); fclose(cmtfile); return ret; }
+            else { while (true) { if (serialstat == true) { break; } } serialstat = false; if (rxdataready == false) { return 0xff; } else { ret = serialchar[0]; rxdataready = false; return ret; } }
             return 0xff;
             //if (uPD8251config[3] & 4) { if (cmtreseted == true) { cmtreseted = false; cmtseek = 0; return 0xff; } else { cmtfile = fopen(FileName, "rb"); if (cmtfile != 0) { fseek(cmtfile, cmtseek++, SEEK_SET); ret = fgetc(cmtfile); fclose(cmtfile); return ret; } } }
             return uPD8251config[2];
@@ -611,7 +631,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x2D:
         case 0x2F:
             //return 0x07;
-            return uPD8251config[1] | (( rxdataready ? 1 : 0 ) << 1) | ( ( ( uPD8251config[3] & 1 ) ? 1 : 0) << 0 );
+            return uPD8251config[1] | (( rxdataready ? 1 : 0 ) << 1) | ( ( ( uPD8251config[3] & 1 ) ? 1 : 0) << 0 ) | ((serialstatw ? 1 : 0) << 0) | ((cmtreseted ? 1 : 0) << 7);
             break;
         case 0x30:
         case 0x32:
@@ -754,6 +774,13 @@ void Z80NMI() { z80irqid = 2; }
 void BeepService(LPVOID* arg4bs) { while (true) { if (beepenabled) { /*Beep(2400, 100);*/ beep2400play(); } else { beep2400stop(); } } }
 
 void RTIService(LPVOID* arg4rtisv) { while (true) { if (ioporte6h & 1) { Z80INT(4); } Sleep(2); } }
+
+void __stdcall serialdaemon(void* prm_0) {
+    COMSTAT tempcomstate;
+    while (true) {
+        if (ttyconnected == true) { if (rxdataready == false) { cmtfileloc = CreateFileA(FileName, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0); ClearCommError(cmtfileloc, 0, &tempcomstate); if (tempcomstate.cbInQue != 0) { ReadFile(cmtfileloc, &serialchar, 1, 0, 0); rxdataready = true; } CloseHandle(cmtfileloc); cmtfileloc = 0; serialstat = true; } }
+    }
+}
 
 int xsiz10times = 0;
 int ysiz10times = 0;
@@ -1228,6 +1255,8 @@ void ResetEmu() {
 
     mousemvenabled = false;
 
+    if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
+
     Z80Init();
 }
 
@@ -1344,6 +1373,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
     BSThreadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)BeepService, 0, 0, 0);
     BGThreadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)Drawbackground, 0, 0, 0);
 	RTIThreadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)RTIService, 0, 0, 0);
+    SERThreadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)serialdaemon, 0, 0, 0);
+    //SERWThreadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)serialdaemonx, 0, 0, 0);
 
     // TODO: ここにコードを挿入してください。
 
@@ -1541,10 +1572,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         mousemvenabled = false;
         break;
     case WM_KEYDOWN:
-        if (wParam == 120) { 
+        if (wParam == 120) {
+            ttyconnected = false;
             cmtreseted = true;
             cmtdatard = true;
-            ttyconnected = false;
+            serialstat = true;
+            serialstatw = true;
             //初期化(これをしないとごみが入る)
             ZeroMemory(FileName, MAX_PATH * 2);
             //「ファイルを開く」ダイアログを表示
@@ -1612,9 +1645,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 crtc2 ^= 1;
                 break;
             case ID_32778:
+                ttyconnected = false;
                 cmtreseted = true;
                 cmtdatard = true;
-                ttyconnected = false;
+                serialstat = true;
+                serialstatw = true;
                 //初期化(これをしないとごみが入る)
                 ZeroMemory(FileName, MAX_PATH * 2);
                 //「ファイルを開く」ダイアログを表示
@@ -1625,10 +1660,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
                 break;
             case ID_32779:
-                cmtreseted = false;
-                cmtdatard = false;
-                ttyconnected = true;
-                memcpy(FileName,"\\\\.\\COM1",9);
+                if (ttyconnected == false) {
+                    cmtreseted = true;
+                    cmtdatard = true;
+                    if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
+                    //cmtfileloc = CreateFileA("\\\\.\\COM1", GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+                    memcpy(FileName, "\\\\.\\COM1", 9);
+                    serialstat = false;
+                    serialstatw = true;
+                    ttyconnected = true;
+                    rxdataready = false;
+                }
                 break;
             case ID_32780:
                 ResetEmu();
