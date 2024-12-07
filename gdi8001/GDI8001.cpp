@@ -336,6 +336,8 @@ bool greenmonitor = false;
 
 bool isenabledpcg = false;
 
+UINT8 arememorybankenabled = 0;
+
 struct typeofpluginctx {
     UINT32 version;
     BOOL ispluginloaded;
@@ -423,18 +425,20 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && galuop & 0x80 && ispc8801 == true) { switch (galuop & 0x30) { case 0x00: for (int cnt = 0; cnt < 3; cnt++) { switch ((galuctrl >> cnt) & 0x11) { case 0x00: gvram[cnt][prm_0 & 0x3FFF] &= ~(prm_1 & 0xFF); break; case 0x01: gvram[cnt][prm_0 & 0x3FFF] |= (prm_1 & 0xFF); break; case 0x10: gvram[cnt][prm_0 & 0x3FFF] |= (prm_1 & 0xFF); break; } } break; case 0x10: gvram[0][prm_0 & 0x3FFF] = alutmp.c[0]; gvram[1][prm_0 & 0x3FFF] = alutmp.c[1]; gvram[2][prm_0 & 0x3FFF] = alutmp.c[2]; break; case 0x20: gvram[0][prm_0 & 0x3FFF] = alutmp.c[1]; break; case 0x30: gvram[1][prm_0 & 0x3FFF] = alutmp.c[0]; break; } return 0; }
         if ((prm_0 & 0xFFFF) >= 0xF000 && fastesttvramenabled == true) { fastestvram[prm_0 & 0xFFF] = prm_1 & 0xFF; return 0; }
         if ((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0x8400 && (rommode == true || biosromenabled == true) && ispc8801 == true && gvramenabled == 0) { if (fastesttvramenabled == true && (((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) >= 0xF000) { fastestvram[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) - 0xF000] = prm_1 & 0xFF; } else { memory[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF)] = prm_1 & 0xFF; } return 0; }
+        if ((arememorybankenabled & 0x10) && (prm_0 & 0xFFFF) < 0x8000) { memory[prm_0 & 0xFFFF] = prm_1 & 0xFF; return 0; }
         memory[prm_0 & 0xFFFF] = prm_1 & 0xFF;
         return 0;
         break;
     case 1:
-        if ((prm_0 & 0xFFFF) < 0x6000 && biosromenabled == false && (rommode == true || ispc8801 == false)) { return bios[prm_0 & 0x7FFF]; }
-        if ((prm_0 & 0xFFFF) < 0x8000 && biosromenabled == false && (rommode == false && ispc8801 == true)) { return n88rom[prm_0 & 0x7FFF]; }
-        if ((prm_0 & 0xFFFF) < 0x8000 && biosromenabled == false && romtype == true) { return n80rom[prm_0 & 0x1fff]; }
         if ((prm_0 & 0xFFFF) >= 0xF000 && fastesttvramenabled == true) { return fastestvram[prm_0 & 0xFFF]; }
         if ((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0x8400 && (rommode == true || biosromenabled == true) && ispc8801 == true && gvramenabled == 0) { if (fastesttvramenabled == true && (((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) >= 0xF000) { return fastestvram[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) - 0xF000]; } else { return memory[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF)]; } }
         if (((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0xC000) && gvramenabled >= 1 && ispc8801 == false) { return gvram[gvramenabled - 1][prm_0 & 0x3FFF]; }
         if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && gvramenabled >= 1 && ispc8801 == true) { return gvram[gvramenabled - 1][prm_0 & 0x3FFF]; }
         if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && galuop & 0x80 && ispc8801 == true) { ALUFETCHBUF wk; alutmp.l = (gvram[0][prm_0 & 0x3FFF] << (8 * 0)) | (gvram[1][prm_0 & 0x3FFF] << (8 * 1)) | (gvram[2][prm_0 & 0x3FFF] << (8 * 2)); wk.l = alucomp.l ^ alutmp.l; return wk.c[0] & wk.c[1] & wk.c[2]; }
+        if ((arememorybankenabled & 0x01) && (prm_0 & 0xFFFF) < 0x8000) { return memory[prm_0 & 0xFFFF]; }
+        if ((prm_0 & 0xFFFF) < 0x6000 && biosromenabled == false && (rommode == true || ispc8801 == false)) { return bios[prm_0 & 0x7FFF]; }
+        if ((prm_0 & 0xFFFF) < 0x8000 && biosromenabled == false && (rommode == false && ispc8801 == true)) { return n88rom[prm_0 & 0x7FFF]; }
+        if ((prm_0 & 0xFFFF) < 0x8000 && biosromenabled == false && romtype == true) { return n80rom[prm_0 & 0x1fff]; }
         return memory[prm_0 & 0xFFFF];
         break;
     case 2:
@@ -687,6 +691,9 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x78:
             textwindoffsetadru8++;
             break;
+        case 0xE2:
+            arememorybankenabled = prm_1;
+            break;
         case 0xE6:
             ioporte6h = prm_1;
             break;
@@ -845,6 +852,9 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x71:
             return extendedromsel;
             break;
+        case 0xE2:
+            return arememorybankenabled;
+            break;
         case 0xE6:
             return ioporte6h;
             break;
@@ -905,7 +915,7 @@ uint8 z80irqfn = 0;
 
 extern void DrawGrp();
 
-void RunZ80Infinity(LPVOID* arg4rz80) { SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal = 0; GetSystemTime(&st_st); while (clockcountinternal < ((graphicdraw ? 1830000 : 4000000) / 60)) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } clockcountinternal += Z80Run(); vbi = vbi ? false : true; } clockcount += clockcountinternal; /*drawgrpbool = true;*/ GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < 16) { Sleep(16 - ststgoal16); } }/*while (z80timerbefore == time(NULL)) {}*/ } }//UINT32 z80timemintab[2] = { 0, 0 }; SYSTEMTIME z80timeminta; while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal = 0; GetSystemTime(&z80timeminta); z80timemintab[0] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); while (clockcountinternal < (graphicdraw ? 183000 : 400000)) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } clockcountinternal += Z80Run(); vbi = vbi ? false : true; } GetSystemTime(&z80timeminta); z80timemintab[1] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); clockcount += clockcountinternal; int timetowaitive = (z80timemintab[1] - z80timemintab[0]); /*if (timetowaitive < 0) { timetowaitive += 1000; }*/ if ((timetowaitive > 0) && (timetowaitive <= 100)) { Sleep(100 - timetowaitive); } else { Sleep(100); } } int z80timerint = time(NULL) - z80timerbefore; /*if (z80timerint < 1000) { Sleep(1000 - z80timerint); }*/ } }
+void RunZ80Infinity(LPVOID* arg4rz80) { SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal = 0; GetSystemTime(&st_st); UINT32 Z80Corepfclock = (graphicdraw ? 1830000 : 4000000); while (clockcountinternal < Z80Corepfclock) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } vbi = true; clockcountinternal += (GN80.Execute((Z80Corepfclock / 3 / 60)) + Z80Corepfclock); vbi = false; clockcountinternal += (GN80.Execute((Z80Corepfclock / 3 / 60) * 2) + Z80Corepfclock); /*vbi = vbi ? false : true;*/ } clockcount += clockcountinternal; /*drawgrpbool = true;*/ GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < 16) { Sleep(16 - ststgoal16); } }/*while (z80timerbefore == time(NULL)) {}*/ } }//UINT32 z80timemintab[2] = { 0, 0 }; SYSTEMTIME z80timeminta; while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal = 0; GetSystemTime(&z80timeminta); z80timemintab[0] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); while (clockcountinternal < (graphicdraw ? 183000 : 400000)) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } clockcountinternal += Z80Run(); vbi = vbi ? false : true; } GetSystemTime(&z80timeminta); z80timemintab[1] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); clockcount += clockcountinternal; int timetowaitive = (z80timemintab[1] - z80timemintab[0]); /*if (timetowaitive < 0) { timetowaitive += 1000; }*/ if ((timetowaitive > 0) && (timetowaitive <= 100)) { Sleep(100 - timetowaitive); } else { Sleep(100); } } int z80timerint = time(NULL) - z80timerbefore; /*if (z80timerint < 1000) { Sleep(1000 - z80timerint); }*/ } }
 
 void Z80INT(uint8 prm_0) { z80irqid = 1; z80irqfn = prm_0; }
 void Z80NMI() { z80irqid = 2; }
@@ -1422,6 +1432,8 @@ void ResetEmu() {
     textwindoffsetadru8 = 0;
     kanjiromaddr1 = 0;
     kanjiromaddr2 = 0;
+
+    arememorybankenabled = 0;
 
     if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
 
