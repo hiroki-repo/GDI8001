@@ -1173,6 +1173,7 @@ int fddriveclose(int prm_0) {
     fdd[(prm_0) & 3].headerside = false;
     GN8012_i8272.Diskstat[(prm_0 & 3)].diskinserted = false;
     GN8012_i8272.Diskstat[(prm_0 & 3)].motoractive = false;
+    if (fdd[(prm_0) & 3].datafile == 0) { return 0; }
     return fclose(fdd[(prm_0) & 3].datafile);
 }
 void fddriveload(int prm_0,const char* prm_1) {
@@ -3256,6 +3257,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
                 break;
             case IDM_EXIT:
+                for (int cnt = 0; cnt < 4; cnt++) {
+                    fddriveclose(cnt);
+                }
                 DestroyWindow(hWnd);
                 break;
             case IDM_HFT:
@@ -3305,7 +3309,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 //初期化(これをしないとごみが入る)
                 ZeroMemory(FileNameoffd, MAX_PATH * 2);
                 //「ファイルを開く」ダイアログを表示
-                uPD8251config[1] = 0x7;
                 if (OpenDiaog(hWnd, "D88 File(*.d88)\0*.d88\0All Files(*.*)\0*.*\0\0",
                     FileNameoffd, OFN_PATHMUSTEXIST | /*OFN_FILEMUSTEXIST | */OFN_HIDEREADONLY)) {
                     //MessageBoxA(0, FileName,"A", 0);
@@ -3315,6 +3318,51 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
                 else {
                     fddriveload(0, FileNameoffd);
+                }
+                break;
+            case ID_32782:
+                //初期化(これをしないとごみが入る)
+                ZeroMemory(FileNameoffd, MAX_PATH * 2);
+                //「ファイルを開く」ダイアログを表示
+                if (OpenDiaog(hWnd, "D88 File(*.d88)\0*.d88\0All Files(*.*)\0*.*\0\0",
+                    FileNameoffd, OFN_PATHMUSTEXIST | /*OFN_FILEMUSTEXIST | */OFN_HIDEREADONLY)) {
+                    //MessageBoxA(0, FileName,"A", 0);
+                }
+                if (strlen(FileNameoffd) == 0) {
+                    fddriveclose(1);
+                }
+                else {
+                    fddriveload(1, FileNameoffd);
+                }
+                break;
+            case ID_32783:
+                //初期化(これをしないとごみが入る)
+                ZeroMemory(FileNameoffd, MAX_PATH * 2);
+                //「ファイルを開く」ダイアログを表示
+                if (OpenDiaog(hWnd, "D88 File(*.d88)\0*.d88\0All Files(*.*)\0*.*\0\0",
+                    FileNameoffd, OFN_PATHMUSTEXIST | /*OFN_FILEMUSTEXIST | */OFN_HIDEREADONLY)) {
+                    //MessageBoxA(0, FileName,"A", 0);
+                }
+                if (strlen(FileNameoffd) == 0) {
+                    fddriveclose(2);
+                }
+                else {
+                    fddriveload(2, FileNameoffd);
+                }
+                break;
+            case ID_32784:
+                //初期化(これをしないとごみが入る)
+                ZeroMemory(FileNameoffd, MAX_PATH * 2);
+                //「ファイルを開く」ダイアログを表示
+                if (OpenDiaog(hWnd, "D88 File(*.d88)\0*.d88\0All Files(*.*)\0*.*\0\0",
+                    FileNameoffd, OFN_PATHMUSTEXIST | /*OFN_FILEMUSTEXIST | */OFN_HIDEREADONLY)) {
+                    //MessageBoxA(0, FileName,"A", 0);
+                }
+                if (strlen(FileNameoffd) == 0) {
+                    fddriveclose(3);
+                }
+                else {
+                    fddriveload(3, FileNameoffd);
                 }
                 break;
             default:
@@ -3335,7 +3383,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         waveOutUnprepareHeader(hWaveOut, &whdr, sizeof(WAVEHDR));
         waveOutClose(hWaveOut);
         free(lpWave);
-        fddriveclose(0);
+        for (int cnt = 0; cnt < 4; cnt++) {
+            fddriveclose(cnt);
+        }
         PostQuitMessage(0);
         break;
     default:
