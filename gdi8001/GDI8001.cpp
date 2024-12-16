@@ -74,6 +74,7 @@ void beep2400stop(){
 
 FILE* cmtfile;
 char FileName[MAX_PATH * 2];
+char FileNameoffd[MAX_PATH * 2];
 
 int cmtseek = 0;
 
@@ -149,7 +150,18 @@ public:
     void output(uint16_t adr, uint8_t data) { GN80memaccess(adr, data, 2); }
 };
 
+int (*GN8012memaccess)(int, int, int);
+class GocaineN8012 : public Z80 {
+public:
+    int32_t load(uint16_t adr) { return GN8012memaccess(adr, 0, 1); }
+    int32_t loadpc(uint16_t adr) { return GN8012memaccess(adr, 0, 1); }
+    void store(uint16_t adr, uint8_t data) { GN8012memaccess(adr, data, 0); }
+    int32_t input(uint16_t adr) { return GN8012memaccess(adr, 0, 3); }
+    void output(uint16_t adr, uint8_t data) { GN8012memaccess(adr, data, 2); }
+};
+
 GocaineN80 GN80;
+GocaineN8012 GN8012;
 
 extern "C" void setz80memaccess(int (*tmp)(int, int, int)) { GN80memaccess = tmp; }
 extern "C" void Z80Init(void) { GN80.Reset(); }
@@ -202,7 +214,9 @@ HANDLE BGThreadid = 0;
 HANDLE RTIThreadid = 0;
 HANDLE SERThreadid = 0;
 HANDLE SERWThreadid = 0;
+HANDLE FDDCZ80Threadid = 0;
 int clockcount = 0;
+int clockcountpc8012 = 0;
 bool videoenabled = false;
 bool beepenabled = true;
 uint8 uPD8251config[4];
@@ -381,6 +395,13 @@ DWORD x86_LoadLibraryWEx(LPCWSTR FileName,HANDLE hFile,DWORD dwFlags) {
     return PeLdrLoadModule(FileName);
 };
 
+void WINAPI dialogtocheck(LPVOID showus) {
+    char fddcommandstr[64];
+    sprintf(fddcommandstr, "%02X\0", ((UINT32)showus));
+    MessageBoxA(0, fddcommandstr, "A", 0);
+    return;
+}
+
 UINT8 pcgtmp = 0;
 UINT16 pcgaddr = 0;
 
@@ -417,6 +438,966 @@ union ALUFETCHBUF{
 ALUFETCHBUF alutmp;
 ALUFETCHBUF alucomp;
 
+UINT8 fddcmemory[16384];
+UINT8 fddcrom[2048];
+
+class i8255 {
+private:
+    uint8 modeio;
+    uint8 bufferab[3];
+    static int i8255phaccessx(int, int, int) {
+        return 0xff;
+    }
+public:
+    int (*i8255phaccess)(int,int,int);
+    void init_i8255() {
+        bufferab[0] = 0;
+        bufferab[1] = 0;
+        bufferab[2] = 0;
+    }
+    i8255() {
+        i8255phaccess = i8255phaccessx;
+        init_i8255();
+    }
+    ~i8255() {
+    }
+    int i8255memaccess(int prm_0, int prm_1, int prm_2) {
+        switch (prm_2 & 1) {
+        case 0:
+            switch (prm_0 & 3) {
+            case 0:
+                if ((modeio & 0x80)) {
+                    switch ((modeio >> 5) & 3) {
+                    case 0:
+                        if (!(modeio & 0x10)) {
+                            bufferab[0] = prm_1;
+                            i8255phaccess(0, bufferab[0], 0);
+                        }
+                        break;
+                    case 1:
+                        if (!(modeio & 0x10)) {
+                            i8255phaccess(0, prm_1, 0);
+                        }
+                        break;
+                    case 2:
+                    case 3:
+                        i8255phaccess(0, prm_1, 0);
+                        break;
+                    }
+                }
+                else {
+                    i8255phaccess(0, prm_1, 0);
+                }
+                break;
+            case 1:
+                if ((modeio & 0x80)) {
+                    if (!((modeio >> 6) & 1)) {
+                        if (!(modeio & 2)) {
+                            if (((modeio >> 2) & 1) == 0) {
+                                bufferab[1] = prm_1;
+                                i8255phaccess(1, bufferab[1], 0);
+                            }
+                            else {
+                                i8255phaccess(1, prm_1, 0);
+                            }
+                        }
+                    }
+                    else {
+                        i8255phaccess(1, prm_1, 0);
+                    }
+                }
+                else {
+                    i8255phaccess(1, prm_1, 0);
+                }
+                break;
+            case 2:
+                if ((modeio & 0x80)) {
+                    if (!((modeio >> 6) & 1)) {
+                        i8255phaccess(2, prm_1 & (((modeio & 1) ? 0 : 0xF) | ((modeio & 8) ? 0 : 0xF0)), 0);
+                    }
+                    else {
+                        i8255phaccess(2, prm_1, 0);
+                    }
+                }
+                else {
+                    i8255phaccess(2, prm_1 | bufferab[2], 0);
+                }
+                break;
+            case 3:
+                modeio = prm_1;
+                if (!(modeio & 0x80)) {
+                    if (modeio & 1) {
+                        bufferab[2] |= (1 << ((modeio >> 1) & 7));
+                    }
+                    else {
+                        bufferab[2] &= ~(1 << ((modeio >> 1) & 7));
+                    }
+                    i8255phaccess(2, bufferab[2], 0);
+                }
+                break;
+            }
+            break;
+        case 1:
+            switch (prm_0 & 3) {
+            case 0:
+                if ((modeio & 0x80)) {
+                    switch ((modeio >> 5) & 3) {
+                    case 0:
+                        if ((modeio & 0x10)) {
+                            bufferab[0] = i8255phaccess(0, 0, 1);
+                            return bufferab[0];
+                        }
+                        break;
+                    case 1:
+                        if ((modeio & 0x10)) {
+                            return i8255phaccess(0, prm_1, 1);
+                        }
+                        break;
+                    case 2:
+                    case 3:
+                        return i8255phaccess(0, prm_1, 1);
+                        break;
+                    }
+                }
+                else {
+                    return i8255phaccess(0, prm_1, 1);
+                }
+                break;
+            case 1:
+                if ((modeio & 0x80)) {
+                    if (!((modeio >> 6) & 1)) {
+                        if ((modeio & 2)) {
+                            if (((modeio >> 2) & 1) == 0) {
+                                bufferab[1] = i8255phaccess(1, 0, 1);
+                                return bufferab[1];
+                            }
+                            else {
+                                return i8255phaccess(1, 0, 1);
+                            }
+                        }
+                    }
+                    else {
+                        return i8255phaccess(1, 0, 1);
+                    }
+                }
+                else {
+                    return i8255phaccess(1, 0, 1);
+                }
+                break;
+            case 2:
+                if ((modeio & 0x80)) {
+                    if (!((modeio >> 6) & 1)) {
+                        return (i8255phaccess(2, 0, 1) & (((modeio & 1) ? 0xF : 0) | ((modeio & 8) ? 0xF0 : 0)));
+                    }
+                    else {
+                        return i8255phaccess(2, 0, 1);
+                    }
+                }
+                else {
+                    return i8255phaccess(2, 0, 1) | bufferab[2];
+                }
+                break;
+            case 3:
+                return modeio;
+                break;
+            }
+            break;
+        }
+        return 0xff;
+    }
+};
+
+#ifndef _min
+#define _min(a,b) (((a) < (b)) ? (a) : (b))
+#endif
+
+class i8272a {
+private:
+    uint8 i8272astatus;
+    uint8 i8272datarate;
+    uint8 statuspos;
+    uint8 statussize;
+    uint8 statcode[8];
+    uint8 commandcode[32];
+    uint8 commandpos;
+    bool readwritephase;
+    struct strct_Drive {
+        uint32 cylinder;
+        uint32 heada;
+        uint32 recorda;
+        uint32 numofwr;
+        uint32 endoftrack;
+        uint32 gaplen;
+        uint32 datalen;
+        uint32 diskpos;
+        bool headsel;
+        uint32 datalength;
+        uint8 result;
+    };
+    strct_Drive Drive[4];
+    uint8 i8272retstat;
+    uint32 cylinderpcn;
+    uint8 latestdisk;
+    uint8 scancommandstat;
+    bool isintpending;
+    bool isnodmamode;
+    bool iswaitedfortheexecevent;
+    uint32 waitedexeceventtime;
+    bool resultphase;
+
+    static int fddphyaccessx(int prm_0, int prm_1, int prm_2, int prm_3, int prm_4) {
+        return 0xff;
+    }
+public:
+    struct strct_Diskstat {
+        bool diskinserted;
+        bool isprotected;
+        bool motoractive;
+        int (*fddphyaccess)(int,int,int,int,int);
+    };
+    strct_Diskstat Diskstat[4];
+private:
+    void get_i8272_param() {
+        Drive[commandcode[1] & 3].headsel = ((commandcode[1] & 4) ? true : false);
+        Drive[commandcode[1] & 3].cylinder = commandcode[2];
+        Drive[commandcode[1] & 3].heada = commandcode[3];
+        Drive[commandcode[1] & 3].recorda = commandcode[4];
+        Drive[commandcode[1] & 3].numofwr = commandcode[5];
+        Drive[commandcode[1] & 3].endoftrack = commandcode[6];
+        Drive[commandcode[1] & 3].gaplen = commandcode[7];
+        Drive[commandcode[1] & 3].datalen = commandcode[8];
+        if (!(commandcode[0] & 16)) {
+            if (Drive[commandcode[1] & 3].numofwr == 0) {
+                Drive[commandcode[1] & 3].datalength = Drive[commandcode[1] & 3].datalen;
+            }
+            else {
+                Drive[commandcode[1] & 3].datalength = ((Drive[latestdisk].numofwr & 7) ? (0x80 << (Drive[latestdisk].numofwr & 0x07)) : (_min(Drive[commandcode[1] & 3].datalen, 0x80)));
+            }
+        }
+        else {
+            Drive[commandcode[1] & 3].datalength = ((Drive[latestdisk].numofwr & 7) ? (0x80 << (Drive[latestdisk].numofwr & 0x07)) : (_min(Drive[commandcode[1] & 3].datalen, 0x80)));
+        }
+        cylinderpcn = Drive[commandcode[1] & 3].cylinder;
+        latestdisk = (commandcode[1] & 3);
+        Drive[latestdisk].diskpos = 0;
+        i8272astatus |= (1 << (latestdisk));
+        i8272astatus |= 0x10;
+        i8272astatus |= ((commandcode[0] & 1) ? 0 : 0x40);
+        scancommandstat = 2;
+        Drive[commandcode[1] & 3].result = (latestdisk & 3) | (Diskstat[latestdisk & 3].diskinserted ? 0 : 0x08) | ((Diskstat[latestdisk & 3].fddphyaccess == fddphyaccessx) ? 0x40 : 0);
+    }
+    void set_i8272_status() {
+        i8272astatus &= ~(1 << (latestdisk));
+        i8272astatus = 0x10 | 0x40 | 0x80;
+        statussize = 7;
+        statuspos = 6;
+        statcode[0] = (commandcode[1] & 7) | (Diskstat[commandcode[1] & 3].diskinserted ? 0 : 0x08) | ((Diskstat[commandcode[1] & 3].fddphyaccess == fddphyaccessx) ? 0x40 : 0);//ST0
+        statcode[1] = ((Diskstat[commandcode[1] & 3].isprotected && (commandcode[0] & 1)) ? 2 : 0) | (Diskstat[commandcode[1] & 3].diskinserted ? 0 : 0x01);//ST1
+        statcode[2] = ((scancommandstat & 3) << 2);//ST2
+        statcode[3] = Drive[commandcode[1] & 3].cylinder;//C
+        statcode[4] = Drive[commandcode[1] & 3].heada;//H
+        statcode[5] = Drive[commandcode[1] & 3].recorda;//R
+        statcode[6] = Drive[commandcode[1] & 3].numofwr;//N
+    }
+    bool id_incr()
+    {
+        if ((commandcode[0] & 19) == 17) {
+            // scan equal
+            if ((Drive[commandcode[1] & 3].datalen & 0xff) == 0x02) {
+                Drive[commandcode[1] & 3].recorda++;
+            }
+        }
+        if (Drive[commandcode[1] & 3].recorda++ != Drive[commandcode[1] & 3].endoftrack) {
+            return true;
+        }
+        Drive[commandcode[1] & 3].recorda = 1;
+        if (commandcode[0] & 0x80) {
+            Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].headsel ? false : true);
+            Drive[commandcode[1] & 3].heada ^= 1;
+            if (Drive[commandcode[1] & 3].heada & 1) {
+                return true;
+            }
+        }
+        Drive[commandcode[1] & 3].cylinder++;
+        return false;
+    }
+    bool is_equal_scan(int prm_0,int prm_1) {
+        switch (commandcode[0] & 31) {
+        case 0x11:
+            if (prm_0 != prm_1) { return false; }
+            break;
+        case 0x19:
+            if (prm_0 > prm_1) { return false; }
+            break;
+        case 0x1d:
+            if (prm_0 < prm_1) { return false; }
+            break;
+        }
+        return true;
+    }
+public:
+    void i8272a_waitforexec() {
+        if (readwritephase == true) {
+            Sleep(waitedexeceventtime);
+            waitedexeceventtime = 0;
+            i8272astatus |= 0x80;
+        }
+        else {
+            if (iswaitedfortheexecevent == false) { return; }
+            iswaitedfortheexecevent = false;
+            Sleep(waitedexeceventtime);
+            waitedexeceventtime = 0;
+            i8272astatus = 0x10 | 0x20 | 0x80;
+            if ((commandcode[0] & 31) == 2 || (commandcode[0] & 31) == 6 || (commandcode[0] & 31) == 12 || (commandcode[0] & 31) == 17 || (commandcode[0] & 31) == 25 || (commandcode[0] & 31) == 29) {
+                i8272astatus |= 0x40;
+            }
+        }
+    }
+    void init_i8272a() {
+        iswaitedfortheexecevent = false;
+        //initialization of the i8272 fddc peripheral floppy parameters
+        for (int cnt = 0; cnt < 4; cnt++) {
+            Drive[cnt].cylinder = 0;
+            Drive[cnt].heada = 0;
+            Drive[cnt].recorda = 0;
+            Drive[cnt].numofwr = 0;
+            Drive[cnt].endoftrack = 0;
+            Drive[cnt].gaplen = 0;
+            Drive[cnt].datalen = 0;
+            Drive[cnt].diskpos = 0;
+            Drive[cnt].headsel = false;
+            Drive[cnt].datalength = 0;
+            Drive[cnt].result = 0;
+        }
+        commandpos = 0;
+        for (int cnt = 0; cnt < 32; cnt++) {
+            commandcode[cnt] = 0;
+        }
+        for (int cnt = 0; cnt < 8; cnt++) {
+            statcode[cnt] = 0;
+        }
+        statussize = 0;
+        readwritephase = false;
+        isintpending = false;
+        i8272astatus = 0x80;
+        isnodmamode = true;
+        waitedexeceventtime = 0;
+        resultphase = false;
+    }
+    i8272a() {
+        init_i8272a();
+        for (int cnt = 0; cnt < 4; cnt++) {
+            Diskstat[cnt].diskinserted = false;
+            Diskstat[cnt].isprotected = false;
+            Diskstat[cnt].motoractive = false;
+            Diskstat[cnt].fddphyaccess = fddphyaccessx;
+        }
+    }
+    ~i8272a() {}
+    void removefdd(int prm_0) { Diskstat[prm_0 & 3].diskinserted = false; Diskstat[prm_0 & 3].isprotected = false; Diskstat[prm_0 & 3].motoractive = false; Diskstat[prm_0 & 3].fddphyaccess = fddphyaccessx; return; }
+    bool is_int_pending() { if (isnodmamode == false) { isintpending = false; return false; } if (isintpending == true) { isintpending = false; return true; } return false; }
+    UINT8 getlatestdisk() { return latestdisk; }
+    void i8272a_sendtc() {
+        if (readwritephase == true || statussize != 0 || (readwritephase == false && statussize == 7)) {
+            set_i8272_status();
+            commandpos = 0;
+            readwritephase = false;
+            isintpending = true;
+        }
+    }
+    int i8272amemaccess(int prm_0, int prm_1, int prm_2) {
+    uint8 commandsize[32] = {1,1,9,3,2,9,9,2,1,9,2,1,9,10,1,3,1,9,2,4,1,1,9,1,1,9,1,1,1,9,1,1};
+        switch (prm_2) {
+        case 0:
+            switch (prm_0 & 1) {
+            case 0:
+                i8272datarate = prm_1 & 0xFF;
+                break;
+            case 1:
+                if ((i8272astatus & 0xc0) == 0x80) {
+                    i8272astatus &= ~0x80;
+                    if (readwritephase == true) {
+                        if ((i8272astatus & 0xc0) == 0x80) { i8272astatus &= ~0x80; }
+                        if (commandcode[0] & 16) {
+                            if (is_equal_scan(Diskstat[commandcode[1] & 3].fddphyaccess(Drive[latestdisk].diskpos, 0, Drive[latestdisk].recorda, Drive[commandcode[1] & 3].cylinder, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 1), prm_1)) {
+                                scancommandstat &= ~2;
+                            }
+                            Drive[latestdisk].diskpos++;
+                            if (Drive[latestdisk].diskpos >= Drive[latestdisk].datalength) {
+                                id_incr();
+                                i8272astatus |= 0x80;
+                                waitedexeceventtime = 2000;
+                                Drive[latestdisk].diskpos = 0;
+                                isintpending = true;
+                            }
+                            else {
+                                if (isnodmamode == true) {
+                                    i8272astatus |= 0x80;
+                                    isintpending = true;
+                                }
+                            }
+                            return 0;
+                        }
+                        else {
+                            if ((commandcode[0] & 1)) {
+                                i8272retstat = Diskstat[commandcode[1] & 3].fddphyaccess(Drive[latestdisk].diskpos, prm_1, Drive[latestdisk].recorda, Drive[commandcode[1] & 3].cylinder, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 0);
+                                Drive[latestdisk].diskpos++;
+                                if (Drive[latestdisk].diskpos >= Drive[latestdisk].datalength) {
+                                    id_incr();
+                                    i8272astatus |= 0x80;
+                                    waitedexeceventtime = 2000;
+                                    Drive[latestdisk].diskpos = 0;
+                                    isintpending = true;
+                                }
+                                else {
+                                    if (isnodmamode == true) {
+                                        i8272astatus |= 0x80;
+                                        isintpending = true;
+                                    }
+                                }
+                                return i8272retstat;
+                            }
+                        }
+                    }
+                    else {
+                        statussize = 0;
+                        statuspos = 0;
+                        commandcode[commandpos] = prm_1 & 0xFF; commandpos++;
+                        if (commandsize[commandcode[0] & 31] >= 2) { i8272astatus = 0x10 | 0x80; }
+                        if (commandsize[commandcode[0] & 31] >= 9 && commandpos > 1) { i8272astatus |= (1 << (commandcode[1] & 3)); }
+                        if (commandsize[commandcode[0] & 31] <= commandpos) {
+                            switch (commandcode[0] & 31) {
+                            case 2://Read a Track
+                                get_i8272_param();
+                                i8272astatus &= ~(1 << (commandcode[1] & 3));
+                                i8272astatus = 0x10 | 0x20 | 0x40 | 0x80;
+                                Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
+                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else {
+                                    readwritephase = true;
+                                    isintpending = true;
+                                }
+                                break;
+                            case 3://specify
+                                i8272astatus = 0x80;
+                                isnodmamode = ((commandcode[2] & 0x01) ? true : false);
+                                break;
+                            case 4://Sense Drive status
+                                i8272astatus = 0x10 | 0x40 | 0x80;
+                                cylinderpcn = Drive[commandcode[1] & 3].cylinder;
+                                latestdisk = (commandcode[1] & 3);
+                                statussize = 1;
+                                statcode[0] = (latestdisk & 3) | (Drive[commandcode[1] & 3].headsel ? 4 : 0) | ((cylinderpcn == 0) ? 0x10 : 0) | (Diskstat[commandcode[1] & 3].diskinserted ? 0x20 : 0) | (Diskstat[commandcode[1] & 3].isprotected ? 0x40 : 0) | (Diskstat[commandcode[1] & 3].motoractive ? 0 : 0x80) | 0x08;//ST3
+                                isintpending = true;
+                                break;
+                            case 5://Write Data
+                                get_i8272_param();
+                                i8272astatus &= ~(1 << (commandcode[1] & 3));
+                                i8272astatus = 0x10 | 0x20 | 0x80;
+                                Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
+                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else {
+                                    readwritephase = true;
+                                    isintpending = true;
+                                }
+                                break;
+                            case 6://Read Data
+                                get_i8272_param();
+                                i8272astatus &= ~(1 << (commandcode[1] & 3));
+                                i8272astatus = 0x10 | 0x20 | 0x40 | 0x80;
+                                Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
+                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else {
+                                    readwritephase = true;
+                                    isintpending = true;
+                                }
+                                break;
+                            case 7://Recalibrate
+                                i8272astatus = 0x80;
+                                Drive[commandcode[1] & 3].cylinder = 0;
+                                cylinderpcn = Drive[commandcode[1] & 3].cylinder;
+                                latestdisk = (commandcode[1] & 3);
+                                Drive[commandcode[1] & 3].result = (latestdisk & 3) | (Diskstat[latestdisk & 3].diskinserted ? 0 : 0x48) | ((Diskstat[latestdisk & 3].fddphyaccess == fddphyaccessx) ? 0x48 : 0) | 0x20;
+                                isintpending = true;
+                                i8272astatus &= ~(1 << (latestdisk));
+                                break;
+                            case 8://Sense Interrupt status
+                                statussize = 0;
+                                i8272astatus = 0x10 | 0x40 | 0x80;
+                                for (int cnt = 0; cnt < 4; cnt++) {
+                                    if (Drive[cnt & 3].result) {
+                                        statussize = 2;
+                                        statcode[0] = Drive[cnt & 3].result;//ST0
+                                        statcode[1] = Drive[cnt & 3].cylinder;//Presented cylinder num
+                                        Drive[cnt & 3].result = 0;
+                                        isintpending = true;
+                                        break;
+                                    }
+                                }
+                                if (statussize == 0) {
+                                    statussize = 1;
+                                    statcode[0] = 0x80;//ST0
+                                    isintpending = true;
+                                }
+                                break;
+                            case 9://Write Deleted Data
+                                get_i8272_param();
+                                i8272astatus &= ~(1 << (commandcode[1] & 3));
+                                i8272astatus = 0x10 | 0x20 | 0x80;
+                                Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
+                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else {
+                                    readwritephase = true;
+                                    isintpending = true;
+                                }
+                                break;
+                            case 12://Read Deleted Data
+                                get_i8272_param();
+                                i8272astatus &= ~(1 << (commandcode[1] & 3));
+                                i8272astatus = 0x10 | 0x20 | 0x40 | 0x80;
+                                Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
+                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else {
+                                    readwritephase = true;
+                                    isintpending = true;
+                                }
+                                break;
+                            case 13://Format Track
+                                cylinderpcn = Drive[commandcode[1] & 3].cylinder;
+                                latestdisk = (commandcode[1] & 3);
+                                for (int cnt2 = 0; cnt2 < commandcode[3]; cnt2++) {
+                                    for (int cnt = 0; cnt < commandcode[2]; cnt++) { Diskstat[commandcode[1] & 3].fddphyaccess(cnt, commandcode[5], cnt2, cylinderpcn, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 0); }
+                                }
+                                resultphase = true;
+                                //set_i8272_status();
+                                break;
+                            case 15://Seek
+                                i8272astatus = 0x80;
+                                Drive[commandcode[1] & 3].cylinder = commandcode[2];
+                                cylinderpcn = Drive[commandcode[1] & 3].cylinder;
+                                latestdisk = (commandcode[1] & 3);
+                                Drive[commandcode[1] & 3].result = (latestdisk & 3) | (Diskstat[latestdisk & 3].diskinserted ? 0 : 0x48) | ((Diskstat[latestdisk & 3].fddphyaccess == fddphyaccessx) ? 0x48 : 0) | 0x20;
+                                isintpending = true;
+                                i8272astatus &= ~(1 << (latestdisk));
+                                break;
+                            case 17://Scan Equal
+                                get_i8272_param();
+                                i8272astatus = 0x10 | 0x20 | 0x40 | 0x80;
+                                Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
+                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else {
+                                    readwritephase = true;
+                                    isintpending = true;
+                                }
+                                break;
+                            case 25://Scan Low or Equal
+                                get_i8272_param();
+                                i8272astatus = 0x10 | 0x20 | 0x40 | 0x80;
+                                Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
+                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else {
+                                    readwritephase = true;
+                                    isintpending = true;
+                                }
+                                break;
+                            case 29://Scan High or Equal
+                                get_i8272_param();
+                                i8272astatus = 0x10 | 0x20 | 0x40 | 0x80;
+                                Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
+                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else {
+                                    readwritephase = true;
+                                    isintpending = true;
+                                }
+                                break;
+                            default:
+                                i8272astatus = 0x10 | 0x40 | 0x80;
+                                statussize = 1;
+                                statcode[0] = 0x80;//ST0
+                                isintpending = true;
+                                break;
+                            }
+                            if (statussize > 0) {
+                                statuspos = statussize - 1;
+                            }
+                            else { statuspos = 0; }
+                            if (readwritephase == false) {
+                                commandpos = 0;
+                            }
+                            isintpending = true;
+                        }
+                    }
+                }
+                break;
+            }
+            return 0;
+            break;
+        case 1:
+            switch (prm_0 & 1) {
+            case 0:
+                return i8272astatus;
+                break;
+            case 1:
+                if ((i8272astatus & 0xc0) == 0xc0) {
+                    i8272astatus &= ~0x80;
+                    if (readwritephase == true) {
+                        if (commandcode[0] & 16) {
+                            i8272astatus |= 0x80;
+                            return 0xff;
+                        }
+                        else {
+                            if (!(commandcode[0] & 1)) {
+                                i8272retstat = Diskstat[commandcode[1] & 3].fddphyaccess(Drive[latestdisk].diskpos, 0, Drive[latestdisk].recorda, Drive[commandcode[1] & 3].cylinder, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 1);
+                                Drive[latestdisk].diskpos++;
+                                if (Drive[latestdisk].diskpos >= Drive[latestdisk].datalength) {
+                                    id_incr();
+                                    i8272astatus |= 0x80;
+                                    waitedexeceventtime = 2000;
+                                    Drive[latestdisk].diskpos = 0;
+                                    isintpending = true;
+                                }
+                                else {
+                                    if (isnodmamode == true) {
+                                        i8272astatus |= 0x80;
+                                    }
+                                    isintpending = true;
+                                }
+                                return i8272retstat;
+                            }
+                        }
+                    }
+                    else {
+                        if (statussize == 0) {
+                            i8272astatus |= 0x80;
+                            return 0xff;
+                        }
+                        else {
+                            i8272retstat = statcode[(statussize - 1) - statuspos];
+                            if (statuspos > 0) { statuspos--; i8272astatus |= 0x80; }
+                            else if (statuspos == 0) { statussize = 0; bool clearirq = true; if ((commandcode[0] & 31) == 0x08) { for (int cnt = 0; cnt < 4; cnt++) { if (Drive[cnt & 3].result) { clearirq = false; break; } } } if (clearirq == true) { isintpending = false; } i8272astatus = 0x80; }
+                            return i8272retstat;
+                        }
+                    }
+                    break;
+                }
+            }
+            break;
+        }
+        return 0xff;
+    }
+};
+
+typedef struct d88header {
+    UINT8 diskname[17];
+    UINT8 res0[9];
+    UINT8 writeprotect;
+    UINT8 disktype;
+    UINT32 disksize;
+    UINT32 trackoffs[164];
+};
+
+typedef struct d88secheader {
+    UINT8 cylinder;
+    UINT8 headerside;
+    UINT8 sector;
+    UINT8 sectorsize;
+    UINT16 sectorspertrack;
+    UINT8 dimensity;
+    UINT8 isdeleted;
+    UINT8 status;
+    UINT8 res0[5];
+    UINT16 sectordatasz;
+};
+
+typedef struct fddcontract4rw {
+    d88header flpimgheader;
+    d88secheader flpimgsecheadertmp;
+    UINT32 track;
+    UINT32 sector;
+    UINT32 sectortmpl;
+    UINT32 sectortmpl2;
+    bool headerside;
+    FILE* datafile;
+};
+
+fddcontract4rw fdd[4];
+
+i8272a GN8012_i8272;
+i8255 GN8012_i8255;
+
+int fddriveclose(int prm_0) {
+    fdd[(prm_0) & 3].track = -1;
+    fdd[(prm_0) & 3].sector = -1;
+    fdd[(prm_0) & 3].sectortmpl = -1;
+    fdd[(prm_0) & 3].sectortmpl2 = -1;
+    fdd[(prm_0) & 3].headerside = false;
+    GN8012_i8272.Diskstat[(prm_0 & 3)].diskinserted = false;
+    GN8012_i8272.Diskstat[(prm_0 & 3)].motoractive = false;
+    return fclose(fdd[(prm_0) & 3].datafile);
+}
+void fddriveload(int prm_0,const char* prm_1) {
+    if (fdd[(prm_0) & 3].datafile != 0) { fddriveclose(prm_0); }
+    fdd[(prm_0) & 3].track = -1;
+    fdd[(prm_0) & 3].sector = -1;
+    fdd[(prm_0) & 3].sectortmpl = -1;
+    fdd[(prm_0) & 3].sectortmpl2 = -1;
+    fdd[(prm_0) & 3].headerside = false;
+    fdd[(prm_0) & 3].datafile = fopen(prm_1, "rb+");
+    if (fdd[(prm_0) & 3].datafile == 0) { return; }
+    GN8012_i8272.Diskstat[(prm_0 & 3)].diskinserted = true;
+    GN8012_i8272.Diskstat[(prm_0 & 3)].motoractive = true;
+    fseek(fdd[(prm_0) & 3].datafile, 0, SEEK_SET);
+    fread(&(fdd[(prm_0) & 3].flpimgheader), sizeof(fdd[(prm_0) & 3].flpimgheader), 1, fdd[(prm_0) & 3].datafile);
+    GN8012_i8272.Diskstat[(prm_0 & 3)].isprotected = (fdd[(prm_0) & 3].flpimgheader.writeprotect == 0x10) ? true : false;
+    return;
+}
+
+UINT8 readbuf4fddrivebus[256];
+
+int fddrivebus(int prm_0, int prm_1, int prm_2, int prm_3, int prm_4) {
+    UINT32 sectortmp = -1;
+    
+    if (!(fdd[(prm_4 >> 8) & 3].track == prm_3 && fdd[(prm_4 >> 8) & 3].sector == prm_2 && fdd[(prm_4 >> 8) & 3].headerside == ((prm_4 & 0x400) ? true : false))) {
+        for (int cnt2 = 0; cnt2 < 164; cnt2++) {
+            if (fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[cnt2] == 0) { break; }
+            fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[cnt2], SEEK_SET);
+            fread(&(fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_4 >> 8) & 3].datafile);
+            if (fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[cnt2] != 0) {
+                for (int cnt = 0; cnt < fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorspertrack * ((fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.dimensity == 0x00) ? 2 : ((fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.dimensity == 0x40) ? 1 : ((fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.dimensity == 0x01) ? 1 : 4))); cnt++) {
+                    fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[cnt2] + (cnt * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)), SEEK_SET);
+                    fread(&(fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_4 >> 8) & 3].datafile);
+                    if ((fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sector - 0) == prm_2 && fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.headerside == ((prm_4 & 0x400) ? 1 : 0)) { sectortmp = cnt; break; }
+                }
+                if ((cnt2 / 2) == prm_3 && sectortmp != -1) {
+                    fdd[(prm_4 >> 8) & 3].sectortmpl = sectortmp;
+                    fdd[(prm_4 >> 8) & 3].sectortmpl2 = cnt2;
+                    break;
+                }
+                sectortmp = -1;
+            }
+        }
+        if (sectortmp == -1) {
+            return 0xff;
+        }
+        fdd[(prm_4 >> 8) & 3].track = prm_3;
+        fdd[(prm_4 >> 8) & 3].sector = prm_2;
+        fdd[(prm_4 >> 8) & 3].headerside = ((prm_4 & 0x400) ? true : false);
+        fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[fdd[(prm_4 >> 8) & 3].sectortmpl2] + (fdd[(prm_4 >> 8) & 3].sectortmpl * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)) + 0x10, SEEK_SET);
+        fread(&readbuf4fddrivebus, 256, 1, fdd[(prm_4 >> 8) & 3].datafile);
+    }
+    if (fdd[(prm_4 >> 8) & 3].sectortmpl == -1) { return 0xff; }
+    switch (prm_4 & 1) {
+    case 0:
+        fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[fdd[(prm_4 >> 8) & 3].sectortmpl2] + (fdd[(prm_4 >> 8) & 3].sectortmpl * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)) + 0x10 + prm_0, SEEK_SET);
+        fputc(prm_1, fdd[(prm_4 >> 8) & 3].datafile);
+        readbuf4fddrivebus[prm_0 & 0xFF] = prm_1 & 0xFF;
+        break;
+    case 1:
+        //fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[fdd[(prm_4 >> 8) & 3].sectortmpl2] + (fdd[(prm_4 >> 8) & 3].sectortmpl * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)) + 0x10 + prm_0, SEEK_SET);
+        return readbuf4fddrivebus[prm_0 & 0xFF];
+        break;
+    }
+    return 0xff;
+}
+
+i8255 GN80_i8255;
+
+UINT8 data4fddc[4];
+
+int i8255mac_GN8012(int prm_0, int prm_1, int prm_2) {
+    switch (prm_2 & 1) {
+    case 0:
+        switch (prm_0) {
+        case 1:
+            data4fddc[0] = prm_1 & 0xFF;
+            break;
+        case 2:
+            data4fddc[2] = (data4fddc[2] & 0x0F) | ((prm_1 << 0) & 0xF0);
+            break;
+        }
+        break;
+    case 1:
+        switch (prm_0) {
+        case 0:
+            return data4fddc[1] & 0xFF;
+            break;
+        case 2:
+            return (data4fddc[2] >> 0) & 0x0F;
+            break;
+        }
+        break;
+    }
+    return 0xff;
+}
+int i8255mac_GN80(int prm_0, int prm_1, int prm_2) {
+    char recvcode4debug[64];
+    switch (prm_2 & 1) {
+    case 0:
+        switch (prm_0) {
+        case 1:
+            data4fddc[1] = prm_1 & 0xFF;
+            break;
+        case 2:
+            data4fddc[2] = (data4fddc[2] & 0xF0) | ((prm_1 >> 4) & 0xF);
+            break;
+        }
+        break;
+    case 1:
+        switch (prm_0) {
+        case 0:
+            return data4fddc[0] & 0xFF;
+            break;
+        case 2:
+            return (data4fddc[2] >> 4) & 0x0F;
+            break;
+        }
+        break;
+    }
+    return 0xff;
+}
+
+void sendfdcmd28001(int prm_0) {
+    while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x02)) { break; } Sleep(0); }
+    i8255mac_GN8012(1, prm_0, 0);
+    i8255mac_GN8012(2, 0x10, 0);
+    while (true) { if (!(i8255mac_GN8012(2, 0, 1) & 0x02)) { break; } Sleep(0); }
+    while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x04)) { break; } Sleep(0); }
+    i8255mac_GN8012(2, 0x00, 0);
+    while (true) { if (!(i8255mac_GN8012(2, 0, 1) & 0x04)) { break; } Sleep(0); }
+}
+int recvfdcmd28001() {
+    int recvvaluetmp = 0;
+    i8255mac_GN8012(2, 0x20, 0);
+    while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x01)) { break; } Sleep(0); }
+    i8255mac_GN8012(2, 0x00, 0);
+    recvvaluetmp = i8255mac_GN8012(0, 0, 1);
+    i8255mac_GN8012(2, 0x40, 0);
+    while (true) { if (!(i8255mac_GN8012(2, 0, 1) & 0x01)) { break; } Sleep(0); }
+    i8255mac_GN8012(2, 0x00, 0);
+    return recvvaluetmp;
+}
+
+void sendfdcmd28001w(int prm_0) {
+    while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x02)) { break; } Sleep(0); }
+    i8255mac_GN8012(1, prm_0 & 0xFF, 0);
+    i8255mac_GN8012(2, 0x10, 0);
+    while (true) { if (!(i8255mac_GN8012(2, 0, 1) & 0x02)) { break; } Sleep(0); }
+    while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x04)) { break; } Sleep(0); }
+    i8255mac_GN8012(1, (prm_0 >> 8) & 0xFF, 0);
+    i8255mac_GN8012(2, 0x00, 0);
+    while (true) { if (!(i8255mac_GN8012(2, 0, 1) & 0x04)) { break; } Sleep(0); }
+}
+int recvfdcmd28001w() {
+    int recvvaluetmp = 0;
+    i8255mac_GN8012(2, 0x20, 0);
+    while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x01)) { break; } Sleep(0); }
+    i8255mac_GN8012(2, 0x00, 0);
+    recvvaluetmp = i8255mac_GN8012(0, 0, 1) & 0xFF;
+    i8255mac_GN8012(2, 0x40, 0);
+    while (true) { if (!(i8255mac_GN8012(2, 0, 1) & 0x01)) { break; } Sleep(0); }
+    recvvaluetmp |= (i8255mac_GN8012(0, 0, 1) << 8) & 0xFF00;
+    i8255mac_GN8012(2, 0x00, 0);
+    return recvvaluetmp;
+}
+int recvfdcmd28001c() {
+    while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; } Sleep(0); }
+    return recvfdcmd28001();
+}
+
+int fddcz80memaccess(int prm_0, int prm_1, int prm_2) {
+    switch (prm_2) {
+    case 0:
+        if ((prm_0 >= 0x4000) && (prm_0 < 0x8000)) { fddcmemory[prm_0 & 0x3FFF] = (prm_1 & 0xFF); }
+        break;
+    case 1:
+        if (prm_0 < 0x800) { return fddcrom[prm_0 & 0x7FF]; }
+        if ((prm_0 >= 0x4000) && (prm_0 < 0x8000)) { return fddcmemory[prm_0 & 0x3FFF]; }
+        break;
+    case 2:
+        switch (prm_0 & 0xFF) {
+        case 0xf8:
+            for (int cnt = 0; cnt < 4; cnt++) {
+                GN8012_i8272.Diskstat[cnt].motoractive = (prm_1 & (1 << cnt)) ? true : false;
+            }
+            break;
+        case 0xfa:
+            return GN8012_i8272.i8272amemaccess(0, prm_1, prm_2 & 1);
+            break;
+        case 0xfb:
+            return GN8012_i8272.i8272amemaccess(1, prm_1, prm_2 & 1);
+            break;
+        case 0xfc:
+        case 0xfd:
+        case 0xfe:
+        case 0xff:
+            return GN8012_i8255.i8255memaccess(prm_0 & 3, prm_1, prm_2 & 1);
+            break;
+        }
+        break;
+    case 3:
+        switch (prm_0 & 0xFF) {
+        case 0xf8:
+            GN8012_i8272.i8272a_sendtc();
+            return 0xff;
+            break;
+        case 0xfa:
+            return GN8012_i8272.i8272amemaccess(0, prm_1, prm_2 & 1);
+            break;
+        case 0xfb:
+            return GN8012_i8272.i8272amemaccess(1, prm_1, prm_2 & 1);
+            break;
+        case 0xfc:
+        case 0xfd:
+        case 0xfe:
+        case 0xff:
+            return GN8012_i8255.i8255memaccess(prm_0 & 3, prm_1, prm_2 & 1);
+            break;
+        }
+        break;
+    }
+    return 0xff;
+}
+
 int z80memaccess(int prm_0, int prm_1, int prm_2) {
     switch (prm_2){
     case 0:
@@ -425,7 +1406,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && galuop & 0x80 && ispc8801 == true) { switch (galuop & 0x30) { case 0x00: for (int cnt = 0; cnt < 3; cnt++) { switch ((galuctrl >> cnt) & 0x11) { case 0x00: gvram[cnt][prm_0 & 0x3FFF] &= ~(prm_1 & 0xFF); break; case 0x01: gvram[cnt][prm_0 & 0x3FFF] |= (prm_1 & 0xFF); break; case 0x10: gvram[cnt][prm_0 & 0x3FFF] |= (prm_1 & 0xFF); break; } } break; case 0x10: gvram[0][prm_0 & 0x3FFF] = alutmp.c[0]; gvram[1][prm_0 & 0x3FFF] = alutmp.c[1]; gvram[2][prm_0 & 0x3FFF] = alutmp.c[2]; break; case 0x20: gvram[0][prm_0 & 0x3FFF] = alutmp.c[1]; break; case 0x30: gvram[1][prm_0 & 0x3FFF] = alutmp.c[0]; break; } return 0; }
         if ((prm_0 & 0xFFFF) >= 0xF000 && fastesttvramenabled == true) { fastestvram[prm_0 & 0xFFF] = prm_1 & 0xFF; return 0; }
         if ((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0x8400 && (rommode == true || biosromenabled == true) && ispc8801 == true && gvramenabled == 0) { if (fastesttvramenabled == true && (((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) >= 0xF000) { fastestvram[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) - 0xF000] = prm_1 & 0xFF; } else { memory[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF)] = prm_1 & 0xFF; } return 0; }
-        if ((arememorybankenabled & 0x10) && (prm_0 & 0xFFFF) < 0x8000) { memory[prm_0 & 0xFFFF] = prm_1 & 0xFF; return 0; }
+        if ((arememorybankenabled & 0x10) && biosromenabled == false && ((prm_0 & 0xFFFF) < 0x8000)) { memory[prm_0 & 0xFFFF] = prm_1 & 0xFF; return 0; }
         memory[prm_0 & 0xFFFF] = prm_1 & 0xFF;
         return 0;
         break;
@@ -435,7 +1416,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         if (((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0xC000) && gvramenabled >= 1 && ispc8801 == false) { return gvram[gvramenabled - 1][prm_0 & 0x3FFF]; }
         if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && gvramenabled >= 1 && ispc8801 == true) { return gvram[gvramenabled - 1][prm_0 & 0x3FFF]; }
         if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && galuop & 0x80 && ispc8801 == true) { ALUFETCHBUF wk; alutmp.l = (gvram[0][prm_0 & 0x3FFF] << (8 * 0)) | (gvram[1][prm_0 & 0x3FFF] << (8 * 1)) | (gvram[2][prm_0 & 0x3FFF] << (8 * 2)); wk.l = alucomp.l ^ alutmp.l; return wk.c[0] & wk.c[1] & wk.c[2]; }
-        if ((arememorybankenabled & 0x01) && (prm_0 & 0xFFFF) < 0x8000) { return memory[prm_0 & 0xFFFF]; }
+        if ((arememorybankenabled & 0x01) && biosromenabled == false && ((prm_0 & 0xFFFF) < 0x8000)) { return memory[prm_0 & 0xFFFF]; }
         if ((prm_0 & 0xFFFF) < 0x6000 && biosromenabled == false && (rommode == true || ispc8801 == false)) { return bios[prm_0 & 0x7FFF]; }
         if ((prm_0 & 0xFFFF) < 0x8000 && biosromenabled == false && (rommode == false && ispc8801 == true)) { return n88rom[prm_0 & 0x7FFF]; }
         if ((prm_0 & 0xFFFF) < 0x8000 && biosromenabled == false && romtype == true) { return n80rom[prm_0 & 0x1fff]; }
@@ -709,6 +1690,12 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0xED:
             kanjiromaddr2 = (kanjiromaddr2 & 0x00FF) | (prm_1 << (8 * 1));
             break;
+        case 0xFC:
+        case 0xFD:
+        case 0xFE:
+        case 0xFF:
+            return GN80_i8255.i8255memaccess(prm_0 & 3, prm_1, prm_2 & 1);
+            break;
         }
         break;
     case 3:
@@ -795,7 +1782,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x4D:
         case 0x4E:
         case 0x4F:
-            return ((uipin & 3) << 6) | ((vbi ? 1 : 0) << 5) | ((rtcdata & 1) << 4) | ((fddconnected ? 1 : 0) << 3) | ((cmtdatard ? 1 : 0) << 2) | ((prtready ? 1 : 0) << 0);
+            return ((uipin & 3) << 6) | ((vbi ? 1 : 0) << 5) | ((rtcdata & 1) << 4) | ((fddconnected ? 0 : 1) << 3) | ((cmtdatard ? 1 : 0) << 2) | ((prtready ? 1 : 0) << 0);
             break;
         case 0x50:
             if (upd31speclzsig == 0) { return uPD3301prm; }
@@ -853,7 +1840,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             return extendedromsel;
             break;
         case 0xE2:
-            return arememorybankenabled;
+            return arememorybankenabled & 0x0F;
             break;
         case 0xE6:
             return ioporte6h;
@@ -869,6 +1856,12 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             break;
         case 0xED:
             return kanjirom2[(kanjiromaddr2 * 2) + 0];
+            break;
+        case 0xFC:
+        case 0xFD:
+        case 0xFE:
+        case 0xFF:
+            return GN80_i8255.i8255memaccess(prm_0 & 3, prm_1, prm_2 & 1);
             break;
         }
         //return 0xff;
@@ -920,7 +1913,405 @@ void RunZ80Infinity(LPVOID* arg4rz80) { SYSTEMTIME st_st; SYSTEMTIME st_goal; in
 void Z80INT(uint8 prm_0) { z80irqid = 1; z80irqfn = prm_0; }
 void Z80NMI() { z80irqid = 2; }
 
-void BeepService(LPVOID* arg4bs) { while (true) { if (beepenabled) { /*Beep(2400, 100);*/ beep2400play(); } else { beep2400stop(); } } }
+void BeepService(LPVOID* arg4bs) { while (true) { if (beepenabled) { /*Beep(2400, 100);*/ beep2400play(); } else { beep2400stop(); } /*if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); }*/ } }
+void PC8012Service(LPVOID* arg4bs) { 
+    while (FDDCZ80Threadid == 0) { Sleep(0); }
+    SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { clockcountpc8012 = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcountpc8012 < 4000000) { clockcountinternal = 0; GetSystemTime(&st_st); UINT32 Z80Corepfclock = 4000000 / 60; while (true) { clockcountinternal += (GN8012.Execute(1) + 1); if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); } if (clockcountinternal >= Z80Corepfclock) { break; } } clockcountpc8012 += clockcountinternal; GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < 16) { Sleep(16 - ststgoal16); } } }
+    UINT8 amountofsec = 0;
+    UINT8 driveid = 0;
+    UINT8 track = 0;
+    UINT8 sector = 0;
+
+    UINT8 driveid2 = 0;
+    UINT8 track2 = 0;
+    UINT8 sector2 = 0;
+
+    UINT8 drivemode = 0x0F;
+    UINT16 transaddr = 0;
+    UINT16 transsize = 0;
+    UINT8 fddcommand = 0;
+    UINT8 fddcommandold = 0;
+    UINT16 recvsendtmp16;
+    RegSet regtmp4du;
+    bool readbufexist = false;
+    bool iserroroccruuedondu = false;
+    UINT16 transaddr2 = 0;
+    UINT8 regid4rwreg4du = 0;
+    while (true) {
+        if (fddconnected == true) {
+            fddcommandold = fddcommand;
+            fddcommand = recvfdcmd28001c();
+            //CreateThread(0, 0, (LPTHREAD_START_ROUTINE)dialogtocheck, ((LPVOID)fddcommand), 0, 0);
+            switch (fddcommand) {
+            case 0x00:
+                readbufexist = false;
+                iserroroccruuedondu = false;
+                fddcmemory[0x3f22] = 0xc9;
+                fddcmemory[0x3f43] = 0;
+                fddcmemory[0x3f44] = 0;
+                GN8012.GetRegSet(&regtmp4du);
+                regtmp4du.sp = 0x8000 - 2;
+                fddcmemory[0x3ffe] = 0x0c;
+                fddcmemory[0x3fff] = 0x00;
+                GN8012.SetRegSet(&regtmp4du);
+                break;
+            case 0x01:
+                amountofsec = recvfdcmd28001();
+                driveid = recvfdcmd28001();
+                track = recvfdcmd28001();
+                sector = recvfdcmd28001() - 1;
+                for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
+                    //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
+                    fddcmemory[cnt] = recvfdcmd28001();
+                }
+                if (GN8012_i8272.Diskstat[driveid].isprotected == true) {
+                    iserroroccruuedondu = true;
+                }
+                else {
+                    iserroroccruuedondu = false;
+                    for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
+                        fddrivebus(cnt % 256, fddcmemory[cnt], (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 0);
+                    }
+                }
+                break;
+            case 0x02:
+                amountofsec = recvfdcmd28001();
+                driveid = recvfdcmd28001();
+                track = recvfdcmd28001();
+                sector = recvfdcmd28001() - 1;
+                if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
+                    readbufexist = true;
+                    iserroroccruuedondu = false;
+                    for (int cnt = 0; cnt < amountofsec; cnt++) {
+                        fddrivebus(0, 0, (cnt)+sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 1);
+                        memcpy(&fddcmemory[(cnt * 256) + 0x1000], readbuf4fddrivebus, 256);
+                    }
+                }
+                else {
+                    readbufexist = false;
+                    iserroroccruuedondu = true;
+                }
+                break;
+            case 0x03:
+                if (readbufexist == false) {
+                    while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; } }
+                }
+                else {
+                    for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
+                        //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
+                        sendfdcmd28001(fddcmemory[cnt + 0x1000]);
+                    }
+                    readbufexist = false;
+                }
+                break;
+            case 0x04:
+                amountofsec = recvfdcmd28001();
+                driveid = recvfdcmd28001();
+                track = recvfdcmd28001();
+                sector = recvfdcmd28001() - 1;
+                driveid2 = recvfdcmd28001();
+                track2 = recvfdcmd28001();
+                sector2 = recvfdcmd28001() - 1;
+                if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
+                    if (GN8012_i8272.Diskstat[driveid2].isprotected == true) {
+                        iserroroccruuedondu = true;
+                    }
+                    else {
+                        iserroroccruuedondu = false;
+                        for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
+                            fddrivebus(cnt % 256, fddrivebus(cnt % 256, 0, (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 1), (cnt / 256) + sector2, ((drivemode & (1 << driveid2)) ? (track2 / 2) : track2), ((drivemode & (1 << driveid)) ? ((track2 % 2) ? 0x400 : 0) : 0) | ((driveid2 & 3) << 8) | 0);
+                        }
+                        readbufexist = false;
+                    }
+                }
+                else {
+                    iserroroccruuedondu = true;
+                }
+                break;
+            case 0x05:
+                driveid = recvfdcmd28001();
+                if (GN8012_i8272.Diskstat[driveid2].isprotected == true) {
+                    iserroroccruuedondu = true;
+                }
+                else {
+                    iserroroccruuedondu = false;
+                    for (int cnt = 0; cnt < (0x10 * 80 * 256); cnt++) {
+                        fddrivebus(cnt % 256, 0x00, (cnt / 256) % 0x10, ((drivemode & (1 << driveid)) ? (((cnt / 256) / 0x10) / 2) : ((cnt / 256) / 0x10)), ((drivemode & (1 << driveid)) ? ((((cnt / 256) / 0x10) % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 0);
+                    }
+                }
+                break;
+            case 0x06:
+                sendfdcmd28001(((readbufexist ? 0x40 : 0) | (iserroroccruuedondu ? 0x01 : 0)));
+                break;
+            case 0x07:
+                sendfdcmd28001(0x0F | (GN8012_i8272.Diskstat[0].diskinserted ? 0x10 : 0) | (GN8012_i8272.Diskstat[1].diskinserted ? 0x20 : 0) | (GN8012_i8272.Diskstat[2].diskinserted ? 0x40 : 0) | (GN8012_i8272.Diskstat[3].diskinserted ? 0x80 : 0));
+                break;
+            case 0x08:
+                sendfdcmd28001(0x80);
+                break;
+            case 0x09:
+                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                for (int cnt = 0; cnt < transsize; cnt++) {
+                    sendfdcmd28001(fddcz80memaccess(transaddr + cnt, 0, 1));
+                }
+                break;
+            case 0x0A:
+                fddcz80memaccess(0x00F7, recvfdcmd28001(), 2);
+                break;
+            case 0x0B:
+                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                for (int cnt = 0; cnt < transsize; cnt++) {
+                    sendfdcmd28001(fddcz80memaccess(transaddr + cnt, 0, 1));
+                }
+                break;
+            case 0x0C:
+                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                for (int cnt = 0; cnt < transsize; cnt++) {
+                    fddcz80memaccess(transaddr + cnt, recvfdcmd28001(), 0);
+                }
+                break;
+            case 0x0D:
+                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                GN8012.GetRegSet(&regtmp4du);
+                regtmp4du.pc = transaddr;
+                GN8012.SetRegSet(&regtmp4du);
+                while (regtmp4du.pc != 0x000C) {
+                    GN8012.Execute(1);
+                    GN8012.GetRegSet(&regtmp4du);
+                }
+                regtmp4du.sp = 0x8000 - 2;
+                fddcmemory[0x3ffe] = 0x0c;
+                fddcmemory[0x3fff] = 0x00;
+                GN8012.SetRegSet(&regtmp4du);
+                break;
+            case 0x0E:
+                amountofsec = recvfdcmd28001();
+                driveid = recvfdcmd28001();
+                track = recvfdcmd28001();
+                sector = recvfdcmd28001() - 1;
+                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
+                    iserroroccruuedondu = false;
+                    for (int cnt = 0; cnt < amountofsec * 256; cnt++) {
+                        fddcz80memaccess(transaddr + cnt, fddrivebus(cnt % 256, 0, (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 1), 0);
+                    }
+                }
+                else {
+                    iserroroccruuedondu = true;
+                }
+                break;
+            case 0x0F:
+                amountofsec = recvfdcmd28001();
+                driveid = recvfdcmd28001();
+                track = recvfdcmd28001();
+                sector = recvfdcmd28001() - 1;
+                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
+                    if (GN8012_i8272.Diskstat[driveid].isprotected == false) {
+                        iserroroccruuedondu = false;
+                        for (int cnt = 0; cnt < amountofsec * 256; cnt++) {
+                            fddrivebus(cnt % 256, fddcz80memaccess(transaddr + cnt, 0, 1), (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 0);
+                        }
+                    }
+                    else {
+                        iserroroccruuedondu = true;
+                    }
+                }
+                else {
+                    iserroroccruuedondu = true;
+                }
+                break;
+            case 0x11:
+                amountofsec = recvfdcmd28001();
+                driveid = recvfdcmd28001();
+                track = recvfdcmd28001();
+                sector = recvfdcmd28001() - 1;
+                for (int cnt = 0; cnt < (amountofsec * 128); cnt++) {
+                    //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
+                    recvsendtmp16 = recvfdcmd28001w();
+                    fddcmemory[(cnt * 2) + 0] = (recvsendtmp16 >> (8 * 0)) & 0xFF;
+                    fddcmemory[(cnt * 2) + 1] = (recvsendtmp16 >> (8 * 1)) & 0xFF;
+                }
+                if (GN8012_i8272.Diskstat[driveid].isprotected == true) {
+                    iserroroccruuedondu = true;
+                }
+                else {
+                    iserroroccruuedondu = false;
+                    for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
+                        fddrivebus(cnt % 256, fddcmemory[cnt], (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 0);
+                    }
+                }
+                break;
+            case 0x12:
+                if (readbufexist == false) {
+                    while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; } }
+                }
+                else {
+                    for (int cnt = 0; cnt < (amountofsec * 128); cnt++) {
+                        //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
+                        sendfdcmd28001w((fddcmemory[((cnt * 2) + 0) + 0x1000] & 0xFF) | ((fddcmemory[((cnt * 2) + 1) + 0x1000] & 0xFF) << 8));
+                    }
+                    readbufexist = false;
+                }
+                break;
+            case 0x13:
+                sendfdcmd28001(0);
+                sendfdcmd28001(0);
+                sendfdcmd28001(0);
+                sendfdcmd28001(0);
+                sendfdcmd28001(track / 2);
+                sendfdcmd28001(track % 2);
+                sendfdcmd28001(sector);
+                sendfdcmd28001(256);
+                break;
+            case 0x14:
+                driveid = recvfdcmd28001();
+                sendfdcmd28001((driveid & 3) | ((track == 0) ? 0x10 : 0) | ((track % 2) ? 0x04 : 0) | (GN8012_i8272.Diskstat[driveid].isprotected ? 0x40 : 0) | ((drivemode & (1 << driveid)) ? 0x08 : 0) | 0x20);
+                break;
+            case 0x15:
+                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                for (int cnt = 0; cnt < (transsize / 2); cnt++) {
+                    //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
+                    sendfdcmd28001w(((fddcz80memaccess(transaddr + ((cnt * 2) + 0), 0, 1) << (8 * 0)) & 0xFF) | ((fddcz80memaccess(transaddr + ((cnt * 2) + 1), 0, 1) << (8 * 1)) & 0xFF00));
+                }
+                break;
+            case 0x16:
+                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                for (int cnt = 0; cnt < (transsize / 2); cnt++) {
+                    //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
+                    recvsendtmp16 = recvfdcmd28001w();
+                    fddcz80memaccess(transaddr + ((cnt * 2) + 0), ((recvsendtmp16 >> (8 * 0)) & 0xFF), 0);
+                    fddcz80memaccess(transaddr + ((cnt * 2) + 1), ((recvsendtmp16 >> (8 * 1)) & 0xFF), 0);
+                }
+                break;
+            case 0x17:
+                drivemode = recvfdcmd28001();
+                break;
+            case 0x18:
+                sendfdcmd28001(drivemode);
+                break;
+            case 0x1C:
+                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                transaddr2 = (fddcmemory[0x3f43] & 0x00FF) | ((fddcmemory[0x3f44] << 8) & 0xFF00);
+                fddcz80memaccess(transaddr2, fddcmemory[0x3f45], 0);
+                fddcmemory[0x3f43] = (transaddr >> (8 * 0)) & 0xFF;
+                fddcmemory[0x3f44] = (transaddr >> (8 * 1)) & 0xFF;
+                fddcmemory[0x3f45] = fddcz80memaccess(transaddr, 0, 1);
+                fddcz80memaccess(transaddr, 0xcf, 0);
+                break;
+            case 0x1D:
+                regid4rwreg4du = recvfdcmd28001();
+                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                GN8012.GetRegSet(&regtmp4du);
+                switch (regid4rwreg4du) {
+                case 0x00:
+                    regtmp4du.af = transaddr;
+                    break;
+                case 0x01:
+                    regtmp4du.bc = transaddr;
+                    break;
+                case 0x02:
+                    regtmp4du.de = transaddr;
+                    break;
+                case 0x03:
+                    regtmp4du.hl = transaddr;
+                    break;
+                case 0x04:
+                    regtmp4du.xaf = transaddr;
+                    break;
+                case 0x05:
+                    regtmp4du.xbc = transaddr;
+                    break;
+                case 0x06:
+                    regtmp4du.xde = transaddr;
+                    break;
+                case 0x07:
+                    regtmp4du.xhl = transaddr;
+                    break;
+                case 0x08:
+                    regtmp4du.ix = transaddr;
+                    break;
+                case 0x09:
+                    regtmp4du.iy = transaddr;
+                    break;
+                case 0x0a:
+                    GN8012.SetIntVec(transaddr);
+                    break;
+                case 0x0b:
+                    regtmp4du.pc = transaddr;
+                    break;
+                case 0x0c:
+                    regtmp4du.sp = transaddr;
+                    break;
+                }
+                GN8012.SetRegSet(&regtmp4du);
+                break;
+            case 0x1E:
+                regid4rwreg4du = recvfdcmd28001();
+                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                GN8012.GetRegSet(&regtmp4du);
+                switch (regid4rwreg4du) {
+                case 0x00:
+                    transaddr = regtmp4du.af;
+                    break;
+                case 0x01:
+                    transaddr = regtmp4du.bc;
+                    break;
+                case 0x02:
+                    transaddr = regtmp4du.de;
+                    break;
+                case 0x03:
+                    transaddr = regtmp4du.hl;
+                    break;
+                case 0x04:
+                    transaddr = regtmp4du.xaf;
+                    break;
+                case 0x05:
+                    transaddr = regtmp4du.xbc;
+                    break;
+                case 0x06:
+                    transaddr = regtmp4du.xde;
+                    break;
+                case 0x07:
+                    transaddr = regtmp4du.xhl;
+                    break;
+                case 0x08:
+                    transaddr = regtmp4du.ix;
+                    break;
+                case 0x09:
+                    transaddr = regtmp4du.iy;
+                    break;
+                case 0x0a:
+                    transaddr = 0;
+                    break;
+                case 0x0b:
+                    transaddr = regtmp4du.pc;
+                    break;
+                case 0x0c:
+                    transaddr = regtmp4du.sp;
+                    break;
+                }
+                sendfdcmd28001((transaddr >> 8) & 0xFF);
+                sendfdcmd28001((transaddr >> 0) & 0xFF);
+                break;
+            }
+        }
+        else {
+            Sleep(16);
+        }
+    }
+}
+void PC8012Diskwaiter(LPVOID* arg4bs) {
+    while (true) {
+        GN8012_i8272.i8272a_waitforexec();
+        Sleep(0);
+    }
+}
 
 void RTIService(LPVOID* arg4rtisv) { while (true) { if (ioporte6h & 1) { Z80INT(4); } Sleep(2); } }
 
@@ -1357,7 +2748,7 @@ void ResetEmu() {
     uipin = 0;
     vbi = false;
     rtcdata = false;
-    fddconnected = false;
+    //fddconnected = false;
     cmtdatard = false;
     prtready = false;
 
@@ -1438,6 +2829,13 @@ void ResetEmu() {
     if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
 
     memset(memory, 0, 65536);
+    memset(fddcmemory, 0, 16384);
+
+    GN8012_i8255.init_i8255();
+    GN8012_i8272.init_i8272a();
+    GN8012.Reset();
+
+    GN80_i8255.init_i8255();
 
     Z80Init();
 }
@@ -1465,6 +2863,19 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(lpCmdLine);
 
     beepinit();
+
+    GN8012memaccess = fddcz80memaccess;
+    GN8012.Reset();
+    GN8012_i8272.init_i8272a();
+    GN8012_i8255.init_i8255();
+    GN8012_i8255.i8255phaccess = i8255mac_GN8012;
+
+    GN80_i8255.init_i8255();
+    GN80_i8255.i8255phaccess = i8255mac_GN80;
+
+    for (int cnt = 0; cnt < 4; cnt++) {
+        GN8012_i8272.Diskstat[cnt].fddphyaccess = fddrivebus;
+    }
 
     Z80Init();
     setz80memaccess(z80memaccess);
@@ -1549,6 +2960,12 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
             }
         }
     }
+    FILE* fddbiosfile = fopen("n80s31.rom", "rb");
+    if (fddbiosfile != 0) {
+        fread(fddcrom, 0x800, 1, fddbiosfile);
+        fclose(fddbiosfile);
+        fddconnected = true;
+    }
 
     FILE* fontfile = fopen("font.rom", "rb");
     if (fontfile != 0) {
@@ -1576,12 +2993,14 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
 
     //timexforch1[0] = timexforch1charx->tm_sec, timexforch1charx->tm_min, timexforch1charx->tm_hour, timexforch1charx->tm_mday, timexforch1charx->tm_mon, timexforch1charx->tm_year - 9, 0, 0, 0;
 
+    FDDCZ80Threadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)PC8012Service, 0, 0, 0);
     Z80Threadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)RunZ80Infinity, 0, 0, 0);
     BSThreadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)BeepService, 0, 0, 0);
     BGThreadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)Drawbackground, 0, 0, 0);
 	RTIThreadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)RTIService, 0, 0, 0);
     SERThreadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)serialdaemon, 0, 0, 0);
     //SERWThreadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)serialdaemonx, 0, 0, 0);
+    CreateThread(0, 0, (LPTHREAD_START_ROUTINE)PC8012Diskwaiter, 0, 0, 0);
 
     // TODO: ここにコードを挿入してください。
 
@@ -1882,6 +3301,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case ID_32780:
                 ResetEmu();
                 break;
+            case ID_32781:
+                //初期化(これをしないとごみが入る)
+                ZeroMemory(FileNameoffd, MAX_PATH * 2);
+                //「ファイルを開く」ダイアログを表示
+                uPD8251config[1] = 0x7;
+                if (OpenDiaog(hWnd, "D88 File(*.d88)\0*.d88\0All Files(*.*)\0*.*\0\0",
+                    FileNameoffd, OFN_PATHMUSTEXIST | /*OFN_FILEMUSTEXIST | */OFN_HIDEREADONLY)) {
+                    //MessageBoxA(0, FileName,"A", 0);
+                }
+                if (strlen(FileNameoffd) == 0) {
+                    fddriveclose(0);
+                }
+                else {
+                    fddriveload(0, FileNameoffd);
+                }
+                break;
             default:
                 return DefWindowProc(hWnd, message, wParam, lParam);
             }
@@ -1900,6 +3335,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         waveOutUnprepareHeader(hWaveOut, &whdr, sizeof(WAVEHDR));
         waveOutClose(hWaveOut);
         free(lpWave);
+        fddriveclose(0);
         PostQuitMessage(0);
         break;
     default:
