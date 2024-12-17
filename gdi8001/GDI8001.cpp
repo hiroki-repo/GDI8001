@@ -841,8 +841,11 @@ public:
                             Drive[latestdisk].diskpos++;
                             if (Drive[latestdisk].diskpos >= Drive[latestdisk].datalength) {
                                 i8272astatus |= 0x80;
+                                set_i8272_status();
                                 waitedexeceventtime = 2000;
                                 Drive[latestdisk].diskpos = 0;
+                                commandpos = 0;
+                                readwritephase = false;
                                 isintpending = true;
                             }
                             else {
@@ -1126,7 +1129,11 @@ public:
                 if ((i8272astatus & 0xc0) == 0xc0) {
                     i8272astatus &= ~0x80;
                     if (readwritephase == true) {
-                        if (commandcode[0] & 16) {
+                        if ((commandcode[0] & 31) == 13) {
+                            i8272astatus |= 0x80;
+                            return 0xff;
+                        }
+                        else if (commandcode[0] & 16) {
                             i8272astatus |= 0x80;
                             return 0xff;
                         }
