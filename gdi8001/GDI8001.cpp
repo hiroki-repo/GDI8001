@@ -806,7 +806,7 @@ public:
         }
     }
     int i8272amemaccess(int prm_0, int prm_1, int prm_2) {
-    uint8 commandsize[32] = {1,1,9,3,2,9,9,2,1,9,2,1,9,10,1,3,1,9,2,4,1,1,9,1,1,9,1,1,1,9,1,1};
+    uint8 commandsize[32] = {1,1,9,3,2,9,9,2,1,9,2,1,9,5,1,3,1,9,2,4,1,1,9,1,1,9,1,1,1,9,1,1};
         switch (prm_2) {
         case 0:
             switch (prm_0 & 1) {
@@ -818,7 +818,42 @@ public:
                     i8272astatus &= ~0x80;
                     if (readwritephase == true) {
                         if ((i8272astatus & 0xc0) == 0x80) { i8272astatus &= ~0x80; }
-                        if (commandcode[0] & 16) {
+                        if ((commandcode[0] & 31) == 13) {
+                            i8272retstat = 0xff;
+                            switch (Drive[latestdisk].diskpos & 3) {
+                            case 0x0:
+                                Drive[commandcode[1] & 3].cylinder = prm_1;
+                                break;
+                            case 0x1:
+                                Drive[commandcode[1] & 3].heada = prm_1;
+                                break;
+                            case 0x2:
+                                Drive[commandcode[1] & 3].recorda = prm_1;
+                                break;
+                            case 0x3:
+                                Drive[commandcode[1] & 3].numofwr = prm_1;
+                                for (int cnt = 0; cnt < commandcode[2]; cnt++) {
+                                    Diskstat[commandcode[1] & 3].fddphyaccess(cnt, commandcode[5], Drive[commandcode[1] & 3].recorda, Drive[commandcode[1] & 3].cylinder, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 0);
+                                }
+                                id_incr();
+                                break;
+                            }
+                            Drive[latestdisk].diskpos++;
+                            if (Drive[latestdisk].diskpos >= Drive[latestdisk].datalength) {
+                                i8272astatus |= 0x80;
+                                waitedexeceventtime = 2000;
+                                Drive[latestdisk].diskpos = 0;
+                                isintpending = true;
+                            }
+                            else {
+                                if (isnodmamode == true) {
+                                    i8272astatus |= 0x80;
+                                    isintpending = true;
+                                }
+                            }
+                            return i8272retstat;
+                        }
+                        else if (commandcode[0] & 16) {
                             if (is_equal_scan(Diskstat[commandcode[1] & 3].fddphyaccess(Drive[latestdisk].diskpos, 0, Drive[latestdisk].recorda, Drive[commandcode[1] & 3].cylinder, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 1), prm_1)) {
                                 scancommandstat &= ~2;
                             }
@@ -838,7 +873,8 @@ public:
                             }
                             return 0;
                         }
-                        else {
+                        else 
+                        {
                             if ((commandcode[0] & 1)) {
                                 i8272retstat = Diskstat[commandcode[1] & 3].fddphyaccess(Drive[latestdisk].diskpos, prm_1, Drive[latestdisk].recorda, Drive[commandcode[1] & 3].cylinder, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 0);
                                 Drive[latestdisk].diskpos++;
@@ -988,12 +1024,21 @@ public:
                                 }
                                 break;
                             case 13://Format Track
+                                Drive[commandcode[1] & 3].headsel = ((commandcode[1] & 4) ? true : false);
+                                Drive[commandcode[1] & 3].numofwr = commandcode[2];
+                                Drive[commandcode[1] & 3].endoftrack = commandcode[3];
+                                Drive[commandcode[1] & 3].gaplen = commandcode[4];
                                 cylinderpcn = Drive[commandcode[1] & 3].cylinder;
                                 latestdisk = (commandcode[1] & 3);
-                                for (int cnt2 = 0; cnt2 < commandcode[3]; cnt2++) {
-                                    for (int cnt = 0; cnt < commandcode[2]; cnt++) { Diskstat[commandcode[1] & 3].fddphyaccess(cnt, commandcode[5], cnt2, cylinderpcn, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 0); }
-                                }
+                                Drive[latestdisk].diskpos = 0;
+                                i8272astatus |= (1 << (latestdisk));
+                                i8272astatus |= 0x10;
+                                i8272astatus |= ((commandcode[0] & 1) ? 0 : 0x40);
+                                scancommandstat = 2;
+                                Drive[commandcode[1] & 3].result = (latestdisk & 3) | (Diskstat[latestdisk & 3].diskinserted ? 0 : 0x08) | ((Diskstat[latestdisk & 3].fddphyaccess == fddphyaccessx) ? 0x40 : 0);
+                                Drive[latestdisk].datalength = 4 * Drive[commandcode[1] & 3].endoftrack;
                                 resultphase = true;
+                                isintpending = true;
                                 //set_i8272_status();
                                 break;
                             case 15://Seek
