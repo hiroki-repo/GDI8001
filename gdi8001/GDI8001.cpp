@@ -1969,7 +1969,7 @@ void Z80NMI() { z80irqid = 2; }
 void BeepService(LPVOID* arg4bs) { while (true) { if (beepenabled) { /*Beep(2400, 100);*/ beep2400play(); } else { beep2400stop(); } /*if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); }*/ } }
 void PC8012Service(LPVOID* arg4bs) { 
     while (FDDCZ80Threadid == 0) { Sleep(0); }
-    SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { clockcountpc8012 = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcountpc8012 < 4000000) { clockcountinternal = 0; GetSystemTime(&st_st); UINT32 Z80Corepfclock = 4000000 / 60; while (true) { clockcountinternal += (GN8012.Execute(1) + 1); if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); } if (clockcountinternal >= Z80Corepfclock) { break; } } clockcountpc8012 += clockcountinternal; GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < 16) { Sleep(16 - ststgoal16); } } }
+    SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { clockcountpc8012 = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcountpc8012 < 4000000) { clockcountinternal = 0; GetSystemTime(&st_st); UINT32 Z80Corepfclock = 4000000 / 60; if (fddconnected == true) { while (true) { clockcountinternal += (GN8012.Execute(1) + 1); if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); } if (clockcountinternal >= Z80Corepfclock) { break; } } } clockcountpc8012 += clockcountinternal; GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < 16) { Sleep(16 - ststgoal16); } } }
     UINT8 amountofsec = 0;
     UINT8 driveid = 0;
     UINT8 track = 0;
@@ -2801,7 +2801,6 @@ void ResetEmu() {
     uipin = 0;
     vbi = false;
     rtcdata = false;
-    //fddconnected = false;
     cmtdatard = false;
     prtready = false;
 
