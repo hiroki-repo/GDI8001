@@ -420,6 +420,8 @@ bool serialstatw = true;
 
 HANDLE cmtfileloc = 0;
 
+UINT8 linecharnum = 0;
+
 void __stdcall serialdaemonx(void* prm_0) {
     while (true) {
         if (ttyconnected == true) {
@@ -1619,6 +1621,9 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
                         colorgraphicmode = ((prm_1 >> 4) & 0x1) ? true : false;
                         crtcactive = 0;
                         break;
+                    case 2:
+                        linecharnum = prm_1 & 0x7f;
+                        break;
                     case 3:
                         grpheight25 = ((prm_1 & 0x1f) < 9) ? true : false;
                         blinkingtime = ((prm_1 >> 6) & 3);
@@ -2696,7 +2701,7 @@ void DrawGrp() {
                                 if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } }
                                 else { SetPalette4emu(9); }
                                 bool rendreverted = (((charattribute & 4) ? true : false) || (((((cursx != -1 && cursy != -1) && (cursx == (drawbackx * (pc8001widthflag ? 1 : 2)) && cursy == drawbacky)) && (blinkai2 == false)) ? true : false)));
-                                if (((charattribute & 128) ? (grpcolors != 0) : (fontcolors != 0)) || (crtmodectrl == true)) {
+                                if (linecharnum != 0){
                                     if ((charattribute & 128) || (attributegcold == true)) { for (int cnt = 0; cnt < 8; cnt++) { if (((char4show >> cnt) & 1) ^ (rendreverted ? 1 : 0)) { SetBox(((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 0)) - 0, ((drawbacky + 0) * 8) + ((int)(2 * ((cnt % 4) + 0))) - 0, ((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 1)) - 0, ((drawbacky + 0) * 8) + ((int)(2 * ((cnt % 4) + 1))) - 0); } } }
                                     else { /*DrawFontUS(((drawbackx + 0) * 8), ((drawbacky + 0) * 9), char4show, prevchar[drawbackx]);*/ DrawFont_(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), char4show, rendreverted); prevchar[drawbackx] = char4show; }
                                     //SetPalette4emu(9); SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
@@ -2886,6 +2891,8 @@ void ResetEmu() {
     textwindoffsetadru8 = 0;
     kanjiromaddr1 = 0;
     kanjiromaddr2 = 0;
+
+    linecharnum = 0;
 
     arememorybankenabled = 0;
 
