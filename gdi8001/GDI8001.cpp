@@ -275,6 +275,9 @@ HDC hdc = 0;
 HDC hdcfullscr = 0;
 HBITMAP hOldCBitmap;
 
+uint8 cursortype = 0;
+bool linespace = false;
+
 int pc8001kb1p;
 
 int chkedbb8 = 0;
@@ -1621,12 +1624,16 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
                         colorgraphicmode = ((prm_1 >> 4) & 0x1) ? true : false;
                         crtcactive = 0;
                         break;
-                    case 2:
-                        linecharnum = prm_1 & 0x7f;
-                        break;
                     case 3:
                         grpheight25 = ((prm_1 & 0x1f) < 9) ? true : false;
+                        cursortype = ((prm_1 >> 5) & 3);
+                        linespace = (prm_1 & 0x80) ? true : false;
+                        break;
+                    case 4:
                         blinkingtime = ((prm_1 >> 6) & 3);
+                        break;
+                    case 5:
+                        linecharnum = prm_1 & 0x7f;
                         break;
                     case 6:
                         cursx = cursxtmp;
@@ -2660,10 +2667,10 @@ void DrawGrp() {
                     breakdowndgp = false;
                     if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); }
                     else { SetPalette4emu(32 + 8); }
-                    for (int drawbacky = 0; drawbacky < (grpheight25 ? 25 : 20); drawbacky++) {
-                        for (int drawbackx = 0; drawbackx < (pc8001widthflag ? 80 : 40); drawbackx++) {
-                            if (((chkedbb8 * 0xbb8) + ((drawbackx * (pc8001widthflag ? 1 : 2)) + (drawbacky * 120))) > (dmatc[2] & 0x3FFF)) { breakdowndgp = true; break; }
-                            uint8 char4show = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx * (pc8001widthflag ? 1 : 2)) + (drawbacky * 120)), 0, 1);
+                    for (int drawbacky = 0; drawbacky < (grpheight25 ? 25 : 20); (linespace ? (drawbacky += 2) : (drawbacky++))) {
+                        for (int drawbackx = 0; drawbackx < (pc8001widthflag ? (linecharnum + 2) : ((linecharnum + 2) / 2)); drawbackx++) {
+                            if (((chkedbb8 * 0xbb8) + ((drawbackx * (pc8001widthflag ? 1 : 2)) + ((drawbacky / (linespace ? 2 : 1)) * 120))) > (dmatc[2] & 0x3FFF)) { breakdowndgp = true; break; }
+                            uint8 char4show = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx * (pc8001widthflag ? 1 : 2)) + ((drawbacky / (linespace ? 2 : 1)) * 120)), 0, 1);
 #if 0
                             attributetmp = -1; attributeold = -1; fontcolors = 0; grpcolors = 0; attributegcold = false;
                             attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
@@ -2673,8 +2680,8 @@ void DrawGrp() {
                             if (semigraphicenabled == true) { charattribute |= 128; }
 #endif
                             attributegcold = false;
-                            charattribute = (graphiccodes[(80 * drawbacky) + (drawbackx * (pc8001widthflag ? 1 : 2))][0]) ^ (crtcreverted ? 4 : 0);
-                            fontcolors = graphiccodes[(80 * drawbacky) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7; grpcolors = graphiccodes[(80 * drawbacky) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7;
+                            charattribute = (graphiccodes[(80 * (drawbacky / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][0]) ^ (crtcreverted ? 4 : 0);
+                            fontcolors = graphiccodes[(80 * (drawbacky / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7; grpcolors = graphiccodes[(80 * (drawbacky / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7;
 #if 0
                             if (charattribute & 4) { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
                             else { if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); } else { SetPalette4emu(32 + 8); } }
@@ -2700,10 +2707,13 @@ void DrawGrp() {
 #endif
                                 if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } }
                                 else { SetPalette4emu(9); }
-                                bool rendreverted = (((charattribute & 4) ? true : false) || (((((cursx != -1 && cursy != -1) && (cursx == (drawbackx * (pc8001widthflag ? 1 : 2)) && cursy == drawbacky)) && (blinkai2 == false)) ? true : false)));
+                                bool rendreverted = (((charattribute & 4) ? true : false) || (((((cursx != -1 && cursy != -1) && (cursx == (drawbackx * (pc8001widthflag ? 1 : 2)) && cursy == drawbacky)) && ((blinkai2 == false) || (cursortype == 2))) ? true : false)));
                                 if (linecharnum != 0){
                                     if ((charattribute & 128) || (attributegcold == true)) { for (int cnt = 0; cnt < 8; cnt++) { if (((char4show >> cnt) & 1) ^ (rendreverted ? 1 : 0)) { SetBox(((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 0)) - 0, ((drawbacky + 0) * 8) + ((int)(2 * ((cnt % 4) + 0))) - 0, ((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 1)) - 0, ((drawbacky + 0) * 8) + ((int)(2 * ((cnt % 4) + 1))) - 0); } } }
                                     else { /*DrawFontUS(((drawbackx + 0) * 8), ((drawbacky + 0) * 9), char4show, prevchar[drawbackx]);*/ DrawFont_(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), char4show, rendreverted); prevchar[drawbackx] = char4show; }
+                                    if ((cursortype & 2) == 0) {
+                                        if (blinkai2 == false || (cursortype & 1) == 0) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8) + 6, ((drawbackx + 1) * 8) - 1, ((drawbacky + 1) * 8) - 1); }
+                                    }
                                     //SetPalette4emu(9); SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
                                     if (charattribute & 64) { SetBox(((drawbackx + 0) * 8) + 3, ((drawbacky + 0) * 8), ((drawbackx + 0) * 8) + 4, ((drawbacky + 1) * 8) - 0); }
                                     if (charattribute & 32) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 1) * 8) - 2, ((drawbackx + 1) * 8), ((drawbacky + 1) * 8) - 1); }
@@ -2801,6 +2811,8 @@ void ResetEmu() {
     overrunerror = false;
     rxdataready = false;
     //crtc2 = 0;
+    cursortype = 0;
+    linespace = false;
 
     bgcolor = 0;
     colorgraphicmode = false;
