@@ -2399,6 +2399,18 @@ uint8 color4draw = 0;
 
 UINT8 prevchar[256];
 
+void myFillRect(HDC prm_0,const RECT* prm_2, HBRUSH prm_3) {
+    UINT32 colorpaletmp = GetBrushColor(prm_3);
+    colorpaletmp = (((colorpaletmp >> (8 * 0)) & 0xFF) << (8 * 2)) | (((colorpaletmp >> (8 * 1)) & 0xFF) << (8 * 1)) | (((colorpaletmp >> (8 * 2)) & 0xFF) << (8 * 0));
+    for (int cnt2 = prm_2->left; cnt2 < prm_2->right; cnt2++) {
+        for (int cnt = prm_2->top; cnt < prm_2->bottom; cnt++) {
+            if (cnt <= 479 && cnt2 <= 639) {
+                (*(UINT32*)(&pBit[((479 - cnt) * (640 * 4)) + (cnt2 * 4)])) = colorpaletmp;
+            }
+        }
+    }
+}
+
 void SetPalette4emu(int prm_0) { color4draw = prm_0+(greenmonitor?128:0); }
 
 void SetPset2(int prm_0, int prm_1) {
@@ -2415,10 +2427,11 @@ void SetPset2(int prm_0, int prm_1) {
         DWORD basecolor2 = GetBrushColor(hBackGround[color4draw]);
         if (basecolor1 == GetBrushColor(hBackGround[32 + bgcolor])) { basecolor1 = basecolor2; }
         HBRUSH hbkgtmp = CreateSolidBrush((((((basecolor1 >> (8 * 0)) & 0xFF) + ((((basecolor1 >> (8 * 0)) & 0xFF) - ((basecolor2 >> (8 * 0)) & 0xFF)) / 2)) & 0xFF) << (8 * 0)) | (((((basecolor1 >> (8 * 1)) & 0xFF) + ((((basecolor1 >> (8 * 1)) & 0xFF) - ((basecolor2 >> (8 * 1)) & 0xFF)) / 2)) & 0xFF) << (8 * 1)) | (((((basecolor1 >> (8 * 2)) & 0xFF) + ((((basecolor1 >> (8 * 2)) & 0xFF) - ((basecolor2 >> (8 * 2)) & 0xFF)) / 2)) & 0xFF) << (8 * 2)));
-        FillRect(hCDC, &rs, hbkgtmp);
+        myFillRect(hCDC, &rs, hbkgtmp);
         DeleteObject(hbkgtmp);
     }
     else {
+#if 0
         for (int cnt2 = 0; cnt2 < (rs.bottom - rs.top); cnt2++) {
             for (int cnt = 0; cnt < (rs.right - rs.left); cnt++) {
                 pBit[((((479 - (rs.top + cnt2)) * 640) + (rs.left + cnt)) * 4) + 0] = ((palette32[color4draw] >> (8 * 3)) & 0xFF);
@@ -2427,7 +2440,8 @@ void SetPset2(int prm_0, int prm_1) {
                 pBit[((((479 - (rs.top + cnt2)) * 640) + (rs.left + cnt)) * 4) + 3] = ((palette32[color4draw] >> (8 * 0)) & 0xFF);
             }
         }
-        FillRect(hCDC, &rs, hBackGround[color4draw]);
+#endif
+        myFillRect(hCDC, &rs, hBackGround[color4draw]);
     }
 }
 void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
@@ -2444,10 +2458,11 @@ void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
         DWORD basecolor2 = GetBrushColor(hBackGround[color4draw]);
         if (basecolor1 == GetBrushColor(hBackGround[32 + bgcolor])) { basecolor1 = basecolor2; }
         HBRUSH hbkgtmp = CreateSolidBrush((((((basecolor1 >> (8 * 0)) & 0xFF) + ((((basecolor1 >> (8 * 0)) & 0xFF) - ((basecolor2 >> (8 * 0)) & 0xFF)) / 2)) & 0xFF) << (8 * 0)) | (((((basecolor1 >> (8 * 1)) & 0xFF) + ((((basecolor1 >> (8 * 1)) & 0xFF) - ((basecolor2 >> (8 * 1)) & 0xFF)) / 2)) & 0xFF) << (8 * 1)) | (((((basecolor1 >> (8 * 2)) & 0xFF) + ((((basecolor1 >> (8 * 2)) & 0xFF) - ((basecolor2 >> (8 * 2)) & 0xFF)) / 2)) & 0xFF) << (8 * 2)));
-        FillRect(hCDC, &rs, hbkgtmp);
+        myFillRect(hCDC, &rs, hbkgtmp);
         DeleteObject(hbkgtmp);
     }
     else {
+#if 0
         for (int cnt2 = 0; cnt2 < (rs.bottom - rs.top); cnt2++) {
             for (int cnt = 0; cnt < (rs.right - rs.left); cnt++) {
                 pBit[((((479 - (rs.top + cnt2)) * 640) + (rs.left + cnt)) * 4) + 0] = ((palette32[color4draw] >> (8 * 3)) & 0xFF);
@@ -2456,7 +2471,8 @@ void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
                 pBit[((((479 - (rs.top + cnt2)) * 640) + (rs.left + cnt)) * 4) + 3] = ((palette32[color4draw] >> (8 * 0)) & 0xFF);
             }
         }
-        FillRect(hCDC, &rs, hBackGround[color4draw]);
+#endif
+        myFillRect(hCDC, &rs, hBackGround[color4draw]);
     }
 }
 
@@ -2474,11 +2490,11 @@ void SetPset(int prm_0, int prm_1) {
         DWORD basecolor2 = GetBrushColor(hBackGround[color4draw]);
         if (basecolor1 == GetBrushColor(hBackGround[32 + bgcolor])) { basecolor1 = basecolor2; }
         HBRUSH hbkgtmp = CreateSolidBrush( ((( ((basecolor1 >> (8 * 0)) & 0xFF) + (( ((basecolor1 >> (8 * 0)) & 0xFF) - ((basecolor2 >> (8 * 0)) & 0xFF)) / 2)) & 0xFF) << (8 * 0)) | (((((basecolor1 >> (8 * 1)) & 0xFF) + ((((basecolor1 >> (8 * 1)) & 0xFF) - ((basecolor2 >> (8 * 1)) & 0xFF)) / 2)) & 0xFF) << (8 * 1)) | (((((basecolor1 >> (8 * 2)) & 0xFF) + ((((basecolor1 >> (8 * 2)) & 0xFF) - ((basecolor2 >> (8 * 2)) & 0xFF)) / 2)) & 0xFF) << (8 * 2)) );
-        FillRect(hCDC, &rs, hbkgtmp);
+        myFillRect(hCDC, &rs, hbkgtmp);
         DeleteObject(hbkgtmp);
     }
     else {
-        FillRect(hCDC, &rs, hBackGround[color4draw]);
+        myFillRect(hCDC, &rs, hBackGround[color4draw]);
     }
 }
 void SetBox(int prm_0, int prm_1, int prm_2, int prm_3) {
@@ -2495,11 +2511,11 @@ void SetBox(int prm_0, int prm_1, int prm_2, int prm_3) {
         DWORD basecolor2 = GetBrushColor(hBackGround[color4draw]);
         if (basecolor1 == GetBrushColor(hBackGround[32 + bgcolor])) { basecolor1 = basecolor2; }
         HBRUSH hbkgtmp = CreateSolidBrush((((((basecolor1 >> (8 * 0)) & 0xFF) + ((((basecolor1 >> (8 * 0)) & 0xFF) - ((basecolor2 >> (8 * 0)) & 0xFF)) / 2)) & 0xFF) << (8 * 0)) | (((((basecolor1 >> (8 * 1)) & 0xFF) + ((((basecolor1 >> (8 * 1)) & 0xFF) - ((basecolor2 >> (8 * 1)) & 0xFF)) / 2)) & 0xFF) << (8 * 1)) | (((((basecolor1 >> (8 * 2)) & 0xFF) + ((((basecolor1 >> (8 * 2)) & 0xFF) - ((basecolor2 >> (8 * 2)) & 0xFF)) / 2)) & 0xFF) << (8 * 2)));
-        FillRect(hCDC, &rs, hbkgtmp);
+        myFillRect(hCDC, &rs, hbkgtmp);
         DeleteObject(hbkgtmp);
     }
     else {
-        FillRect(hCDC, &rs, hBackGround[color4draw]);
+        myFillRect(hCDC, &rs, hBackGround[color4draw]);
     }
 }
 
@@ -2551,6 +2567,7 @@ bool blinkai = false;
 bool blinkai2 = false;
 bool semigraphicenabled = false;
 int blinkwaitisti = 0;
+int blinkwaitisti2 = 0;
 
 int lp_ggxy[2];
 bool mousemvenabled = false;
@@ -2730,8 +2747,8 @@ void DrawGrp() {
         }
     }
     else { SetPalette4emu(8); SetBGCL(); }
-    if (((blinkingtime * 1) * 9) == blinkwaitisti) { blinkai2 = blinkai2 ? false : true; }
-    if (((blinkingtime * 2) * 9) <= blinkwaitisti) { blinkai = blinkai ? false : true; blinkwaitisti = 0; }
+    if ((blinkwaitisti % ((((4 - blinkingtime) * 1) * 2) + 1)) == 0) { blinkai2 = blinkai2 ? false : true; }
+    if ((((4 - blinkingtime) * 2) * 2) <= blinkwaitisti) { blinkai = (blinkwaitisti2 != 0) ? false : true; blinkwaitisti2++; if (blinkwaitisti2 == 4) { blinkwaitisti2 = 0; } blinkwaitisti = 0; }
     blinkwaitisti++;
 #if 0
     SetStretchBltMode(hCDC, (isharftoneenabled ? STRETCH_HALFTONE : COLORONCOLOR));
@@ -3206,7 +3223,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    //hdcb = CreateCompatibleDC(hdc);
    hbDib = CreateDIBSection(hdc, (BITMAPINFO*)pbi, DIB_RGB_COLORS, (void**)&pBit, NULL, 0);
    hCDC = CreateCompatibleDC(hdc);
-   hCBitmap = CreateCompatibleBitmap(hdc, 640, 480);
+   //hCBitmap = CreateCompatibleBitmap(hdc, 640, 480);
+   hCBitmap = 0;
    hCDCfullscr = CreateCompatibleDC(hdcfullscr);
    hbOld = (HBITMAP)SelectObject(hCDC, hbDib);
    hCBitmapfullscr = CreateCompatibleBitmap(hdcfullscr, 640, 480);
