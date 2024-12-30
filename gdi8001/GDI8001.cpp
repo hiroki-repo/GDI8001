@@ -2746,14 +2746,7 @@ void DrawGrp() {
                             }
                         }
                         if (semigraphicenabled == true) { charattribute |= 128; }
-#if 1
-                        if ((colorfullgraphicmode == false && fullgraphicdraw == true) && ispc8801 == true) {
-                            graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute ^ (4 ^ (crtcreverted ? 4 : 0));
-                        }
-                        else {
-                            graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute ^ (crtcreverted ? 4 : 0);
-                        }
-#endif
+                        graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute ^ (crtcreverted ? 4 : 0);
                         if (biosromenabled == false && (rommode == false && ispc8801 == true)) { graphiccodes[(80 * drawbacky) + drawbackx][0] ^= 4; }
                         //graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute ^ (crtcreverted ? 4 : 0);
                         graphiccodes[(80 * drawbacky) + drawbackx][1] = grpcolors;
