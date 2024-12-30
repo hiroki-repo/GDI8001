@@ -2515,14 +2515,22 @@ void SetPalette4emu(int prm_0) { color4draw = prm_0 + (greenmonitor ? 128 : 0); 
 void SetPalette4emu2(int prm_0) { color4draw = prm_0 + (greenmonitor ? 768 : 256); }
 
 void SetPset2(int prm_0, int prm_1) {
-    xsiz10times = colorfullgraphicmode ? 200 : 100; ysiz10times = (hiresgrpresol200 == false && ispc8801 == true) ? 120 : 240;
+    xsiz10times = colorfullgraphicmode ? ((ispc8801 == true) ? 100 : 200) : 100; ysiz10times = (hiresgrpresol200 == false && ispc8801 == true) ? 120 : ((colorfullgraphicmode == true && hiresgrpresol200 == true) ? 120 : 240);
     //xsiz10times = pc8001widthflag ? 10 : 20; ysiz10times = grpheight25 ? 24 : 30;
     //xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 213 : 267;
     //xsiz10times = 10; ysiz10times = 10;
-    rs.left = (((prm_0 + 0) * xsiz10times) / 100);
-    rs.top = (((prm_1 + 0) * ysiz10times) / 100);
-    rs.right = (((prm_0 + 1) * xsiz10times) / 100);
-    rs.bottom = (((prm_1 + 1) * ysiz10times) / 100);
+    if (colorfullgraphicmode == true && hiresgrpresol200 == true) {
+        rs.left = (((prm_0 + 0) * xsiz10times) / 100);
+        rs.top = ((((prm_1 * 2) + 0) * ysiz10times) / 100);
+        rs.right = (((prm_0 + 1) * xsiz10times) / 100);
+        rs.bottom = ((((prm_1 * 2) + 1) * ysiz10times) / 100);
+    }
+    else {
+        rs.left = (((prm_0 + 0) * xsiz10times) / 100);
+        rs.top = (((prm_1 + 0) * ysiz10times) / 100);
+        rs.right = (((prm_0 + 1) * xsiz10times) / 100);
+        rs.bottom = (((prm_1 + 1) * ysiz10times) / 100);
+    }
     if (chkedbb8 >= 1) {
         DWORD basecolor1 = GetPixel(hCDC, rs.left, rs.top);
         DWORD basecolor2 = GetBrushColor(hBackGround[color4draw]);
@@ -2546,7 +2554,7 @@ void SetPset2(int prm_0, int prm_1) {
     }
 }
 void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
-    xsiz10times = colorfullgraphicmode ? 200 : 100; ysiz10times = (hiresgrpresol200 == false && ispc8801 == true) ? 120 : 240;
+    xsiz10times = colorfullgraphicmode ? ((ispc8801 == true) ? 100 : 200) : 100; ysiz10times = (hiresgrpresol200 == false && ispc8801 == true) ? 120 : ((colorfullgraphicmode == true && hiresgrpresol200 == true) ? 120 : 240);
     //xsiz10times = pc8001widthflag ? 10 : 20; ysiz10times = grpheight25 ? 24 : 30;
     //xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 213 : 267;
     //xsiz10times = 10; ysiz10times = 10;
@@ -2559,7 +2567,18 @@ void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
         DWORD basecolor2 = GetBrushColor(hBackGround[color4draw]);
         if (basecolor1 == GetBrushColor(hBackGround[32 + bgcolor])) { basecolor1 = basecolor2; }
         HBRUSH hbkgtmp = CreateSolidBrush((((((basecolor1 >> (8 * 0)) & 0xFF) + ((((basecolor1 >> (8 * 0)) & 0xFF) - ((basecolor2 >> (8 * 0)) & 0xFF)) / 2)) & 0xFF) << (8 * 0)) | (((((basecolor1 >> (8 * 1)) & 0xFF) + ((((basecolor1 >> (8 * 1)) & 0xFF) - ((basecolor2 >> (8 * 1)) & 0xFF)) / 2)) & 0xFF) << (8 * 1)) | (((((basecolor1 >> (8 * 2)) & 0xFF) + ((((basecolor1 >> (8 * 2)) & 0xFF) - ((basecolor2 >> (8 * 2)) & 0xFF)) / 2)) & 0xFF) << (8 * 2)));
-        myFillRect(hCDC, &rs, hbkgtmp);
+        if (colorfullgraphicmode == true && hiresgrpresol200 == true) {
+            for (int cnt = prm_1; cnt < prm_3; cnt++) {
+                rs.left = (((prm_0 + 0) * xsiz10times) / 100);
+                rs.top = ((((cnt * 2) + 0) * ysiz10times) / 100);
+                rs.right = (((prm_2 + 0) * xsiz10times) / 100);
+                rs.bottom = ((((cnt * 2) + 1) * ysiz10times) / 100);
+                myFillRect(hCDC, &rs, hbkgtmp);
+            }
+        }
+        else {
+            myFillRect(hCDC, &rs, hbkgtmp);
+        }
         DeleteObject(hbkgtmp);
     }
     else {
@@ -2573,7 +2592,18 @@ void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
             }
         }
 #endif
-        myFillRect(hCDC, &rs, hBackGround[color4draw]);
+        if (colorfullgraphicmode == true && hiresgrpresol200 == true) {
+            for (int cnt = prm_1; cnt < prm_3; cnt++) {
+                rs.left = (((prm_0 + 0) * xsiz10times) / 100);
+                rs.top = ((((cnt * 2) + 0) * ysiz10times) / 100);
+                rs.right = (((prm_2 + 0) * xsiz10times) / 100);
+                rs.bottom = ((((cnt * 2) + 1) * ysiz10times) / 100);
+                myFillRect(hCDC, &rs, hBackGround[color4draw]);
+            }
+        }
+        else {
+            myFillRect(hCDC, &rs, hBackGround[color4draw]);
+        }
     }
 }
 
@@ -2675,6 +2705,8 @@ bool mousemvenabled = false;
 
 uint8 graphiccodes[(80*25)][2];
 
+uint8 colorbool[25];
+
 void DrawGrp() {
     charattribute = 0;
     if (biosromenabled == false && (rommode == false && ispc8801 == true)) { charattribute = 4; }
@@ -2700,7 +2732,7 @@ void DrawGrp() {
             for (int drawbacky = 0; drawbacky < 25; drawbacky++) {
                 for (int drawbackx = 0; drawbackx < 80; drawbackx++) {
                     uint8 char4show = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx)+(drawbacky * 120)), 0, 1);
-                    attributetmp = -1; attributeold = -1; fontcolors = 0; grpcolors = 0; attributegcold = false;
+                    attributetmp = -1; attributeold = -1; fontcolors = colorbool[drawbacky]; grpcolors = colorbool[drawbacky]; attributegcold = false;
                     attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
                     if (crtcatsc != 1) {
                         if (crtcatsc & 4) {
@@ -2725,42 +2757,31 @@ void DrawGrp() {
                         if (biosromenabled == false && (rommode == false && ispc8801 == true)) { graphiccodes[(80 * drawbacky) + drawbackx][0] ^= 4; }
                         //graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute ^ (crtcreverted ? 4 : 0);
                         graphiccodes[(80 * drawbacky) + drawbackx][1] = grpcolors;
+                        colorbool[drawbacky] = grpcolors;
                     }
                     else {
                         graphiccodes[(80 * drawbacky) + drawbackx][0] = 0;
                         graphiccodes[(80 * drawbacky) + drawbackx][1] = 0;
+                        colorbool[drawbacky] = 0xFF;
                     }
                 }
             }
             upd3301stat |= 8;
             if (fullgraphicdraw == true) {
 
-                for (int drawbacky = 0; drawbacky < (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 50 : 25); drawbacky++) {
-                    for (int drawbackx = 0; drawbackx < (colorfullgraphicmode ? 40 : 80); drawbackx++) {
-                        //if (((chkedbb8 * 0xbb8) + ((drawbackx * (colorfullgraphicmode ? 2 : 1)) + (drawbacky * 120))) > (dmatc[2] & 0x3FFF)) { breakdowndgp = true; break; }
-                        uint8 char4show = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx * (colorfullgraphicmode ? 2 : 1)) + ((drawbacky / ((hiresgrpresol200 == false && ispc8801 == true) ? 2 : 1)) * 120)), 0, 1);
-#if 0
-                        attributetmp = -1; attributeold = -1; fontcolors = 0; grpcolors = 0; attributegcold = false;
-                        attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
-                        for (int cnt = 0; cnt < 20; cnt++) {
-                            uint8 charattributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (colorfullgraphicmode ? 2 : 1); if (attributetmp <= drawbackx && attributetmp > attributeold) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (colorfullgraphicmode ? 2 : 1); if ((attributetmp3 <= drawbackx && attributetmp3 > attributeold3) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
-                        }
-                        if (semigraphicenabled == true) { charattribute |= 128; }
-#endif
-                        charattribute = (graphiccodes[(80 * (drawbacky / (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][0]);
-                        fontcolors = graphiccodes[(80 * (drawbacky / (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][1] & 7; grpcolors = graphiccodes[(80 * (drawbacky / ((hiresgrpresol200 == false && ispc8801 == true) ? 2 : 1))) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][1] & 7;
-                        //grpcolors = 9;
-                        if (ispc8801 == true) {
+                if (ispc8801 == true) {
+                    for (int drawbacky = 0; drawbacky < (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 50 : 25); drawbacky++) {
+                        for (int drawbackx = 0; drawbackx < (pc8001widthflag ? (linecharnum + 2) : ((linecharnum + 2) / 2)); drawbackx++) {
                             if (colorfullgraphicmode == true && hiresgrpresol200 == true) {
                                 //SetPalette4emu2(((UINT32)palette512_8bt[0][0] & 0x3F) | (((UINT32)palette512_8bt[0][1] & 0x7) << 6));
                                 SetPalette4emu(64);
-                                SetBox2(((drawbackx + 0) * 8), ((drawbacky + 0) * (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) - 0);
+                                SetBox2(((drawbackx + 0) * (8 * (pc8001widthflag ? 1 : 2))), ((drawbacky + 0) * (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))), ((drawbackx + 1) * (8 * (pc8001widthflag ? 1 : 2))) - 0, ((drawbacky + 1) * (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) - 0);
                                 for (int cnt = 0; cnt < (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1)); cnt++) {
-                                    for (int cnt2 = 0; cnt2 < 8; cnt2++) {
-                                        if ((((showstatefor88grp & 2) ? 0 : (((gvram[0][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 7)) | ((showstatefor88grp & 4) ? 0 : (((gvram[1][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 6)) | ((showstatefor88grp & 8) ? 0 : (((gvram[2][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 5))) != 0) {
+                                    for (int cnt2 = 0; cnt2 < (8 * (colorfullgraphicmode ? 2 : 1)); cnt2++) {
+                                        if ((((showstatefor88grp & 2) ? 0 : (((gvram[0][((drawbackx * (pc8001widthflag ? 1 : 2)) + (cnt2 / 8)) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << (cnt2 % 8)) & 0x80) >> 7)) | ((showstatefor88grp & 4) ? 0 : (((gvram[1][((drawbackx * (pc8001widthflag ? 1 : 2)) + (cnt2 / 8)) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << (cnt2 % 8)) & 0x80) >> 6)) | ((showstatefor88grp & 8) ? 0 : (((gvram[2][((drawbackx * (pc8001widthflag ? 1 : 2)) + (cnt2 / 8)) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << (cnt2 % 8)) & 0x80) >> 5))) != 0) {
                                             //SetPalette4emu2(((UINT32)palette512_8bt[(((showstatefor88grp & 2) ? 0 : (((gvram[0][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 7)) | ((showstatefor88grp & 4) ? 0 : (((gvram[1][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 6)) | ((showstatefor88grp & 8) ? 0 : (((gvram[2][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 5)))][0] & 0x3F) | (((UINT32)palette512_8bt[(((showstatefor88grp & 2) ? 0 : (((gvram[0][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) << 0)) | ((showstatefor88grp & 4) ? 0 : (((gvram[1][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) << 1)) | ((showstatefor88grp & 8) ? 0 : (((gvram[2][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) << 2)))][1] & 0x7) << 6));
-                                            SetPalette4emu((((showstatefor88grp & 2) ? 0 : (((gvram[0][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 7)) | ((showstatefor88grp & 4) ? 0 : (((gvram[1][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 6)) | ((showstatefor88grp & 8) ? 0 : (((gvram[2][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 5))) + 64);
-                                            SetPset2((drawbackx * 8) + cnt2, (drawbacky * (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + cnt);
+                                            SetPalette4emu((((showstatefor88grp & 2) ? 0 : (((gvram[0][((drawbackx * (pc8001widthflag ? 1 : 2)) + (cnt2 / 8)) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << (cnt2 % 8)) & 0x80) >> 7)) | ((showstatefor88grp & 4) ? 0 : (((gvram[1][((drawbackx * (pc8001widthflag ? 1 : 2)) + (cnt2 / 8)) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << (cnt2 % 8)) & 0x80) >> 6)) | ((showstatefor88grp & 8) ? 0 : (((gvram[2][((drawbackx * (pc8001widthflag ? 1 : 2)) + (cnt2 / 8)) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << (cnt2 % 8)) & 0x80) >> 5))) + 64);
+                                            SetPset2((drawbackx * (8 * (pc8001widthflag ? 1 : 2))) + cnt2, (drawbacky * (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + cnt);
                                         }
                                     }
                                 }
@@ -2776,7 +2797,24 @@ void DrawGrp() {
                                 }
                             }
                         }
-                        else {
+                    }
+                }
+                else {
+                    for (int drawbacky = 0; drawbacky < (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 50 : 25); drawbacky++) {
+                        for (int drawbackx = 0; drawbackx < (colorfullgraphicmode ? 40 : 80); drawbackx++) {
+                            //if (((chkedbb8 * 0xbb8) + ((drawbackx * (colorfullgraphicmode ? 2 : 1)) + (drawbacky * 120))) > (dmatc[2] & 0x3FFF)) { breakdowndgp = true; break; }
+                            uint8 char4show = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx * (colorfullgraphicmode ? 2 : 1)) + ((drawbacky / ((hiresgrpresol200 == false && ispc8801 == true) ? 2 : 1)) * 120)), 0, 1);
+#if 0
+                            attributetmp = -1; attributeold = -1; fontcolors = 0; grpcolors = 0; attributegcold = false;
+                            attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
+                            for (int cnt = 0; cnt < 20; cnt++) {
+                                uint8 charattributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (colorfullgraphicmode ? 2 : 1); if (attributetmp <= drawbackx && attributetmp > attributeold) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) / (colorfullgraphicmode ? 2 : 1); if ((attributetmp3 <= drawbackx && attributetmp3 > attributeold3) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
+                            }
+                            if (semigraphicenabled == true) { charattribute |= 128; }
+#endif
+                            charattribute = (graphiccodes[(80 * (drawbacky / (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][0]);
+                            fontcolors = graphiccodes[(80 * (drawbacky / (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][1] & 7; grpcolors = graphiccodes[(80 * (drawbacky / ((hiresgrpresol200 == false && ispc8801 == true) ? 2 : 1))) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][1] & 7;
+                            //grpcolors = 9;
                             if (fullgrpmode == true && colorfullgraphicmode == false) {
                                 SetPalette4emu(32 + 8);
                                 SetBox2(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
@@ -2811,10 +2849,10 @@ void DrawGrp() {
                                                 if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); }
                                                 else { SetPalette4emu(32 + 8); }
                                                 SetPset2((drawbackx * 8) + cnt, (drawbacky * 8) + cnt2);
+                                            }
                                         }
-                                    }
 #endif
-                                }
+                                    }
                                     else {
                                         UINT8 colortmp = (((gvram[0][(((drawbackx * 2) + (((drawbacky * 8) + cnt2) * 80))) + ((cnt % 8) / 4)] << (((cnt % 8) % 4) * 2)) & 192) >> 6) & 3;
                                         if (colortmp != 0) {
@@ -2824,12 +2862,12 @@ void DrawGrp() {
                                             SetPset2((drawbackx * 8) + cnt, (drawbacky * 8) + cnt2);
                                         }
                                     }
+                                }
                             }
                         }
                     }
+                }
             }
-        }
-    }
             if ((showstatefor88grp & 1) == 0) {
                 if (crtcactive == 1) {
                     breakdowndgp = false;
@@ -3080,6 +3118,7 @@ void ResetEmu() {
 
     arememorybankenabled = 0;
     rs232crate = 0;
+    for (int cnt = 0; cnt < 25; cnt++) { colorbool[cnt] = 0xff; }
 
     if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
 
@@ -3118,6 +3157,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
+
+    for (int cnt = 0; cnt < 25; cnt++) { colorbool[cnt] = 0xff; }
 
     beepinit();
 
