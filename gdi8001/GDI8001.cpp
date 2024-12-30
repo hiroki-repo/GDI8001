@@ -188,6 +188,7 @@ uint8 kanjirom1[0x20000];
 uint8 kanjirom2[0x20000];
 uint16 kanjiromaddr1 = 0;
 uint16 kanjiromaddr2 = 0;
+uint8 erom[8][4][8192];
 
 uint8 pc8001keybool[0x10];
 
@@ -270,6 +271,9 @@ uint8 ret = 0;
 uint8 seq = 0;
 
 uint8 crtc3 = 0;
+uint8 bsmode = 0;
+
+uint8 intmasklevel = 0xf;
 
 HDC hdc = 0;
 HDC hdcfullscr = 0;
@@ -325,7 +329,7 @@ HBITMAP hCBitmap;
 HDC hCDCfullscr;
 HBITMAP hCBitmapfullscr;
 HPEN hPen;
-HBRUSH hBackGround[256];
+HBRUSH hBackGround[1280];
 RECT rs;
 
 HBITMAP hbDib;
@@ -353,6 +357,10 @@ bool greenmonitor = false;
 
 bool isenabledpcg = false;
 bool crtcreverted = false;
+
+bool is8mhz = false;
+
+uint8 crtcatsc = 0;
 
 UINT8 arememorybankenabled = 0;
 
@@ -424,6 +432,11 @@ bool serialstatw = true;
 HANDLE cmtfileloc = 0;
 
 UINT8 linecharnum = 0;
+UINT8 upd3301intm = 0;
+
+UINT8 rs232crate = 0;
+
+UINT8 bankedmemory[4][0x8000];
 
 void __stdcall serialdaemonx(void* prm_0) {
     while (true) {
@@ -1460,25 +1473,54 @@ int fddcz80memaccess(int prm_0, int prm_1, int prm_2) {
 int z80memaccess(int prm_0, int prm_1, int prm_2) {
     switch (prm_2){
     case 0:
-        if (((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0xC000) && gvramenabled >= 1 && ispc8801 == false) { gvram[gvramenabled - 1][prm_0 & 0x3FFF] = prm_1 & 0xFF; return 0; }
         if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && gvramenabled >= 1 && ispc8801 == true) { gvram[gvramenabled - 1][prm_0 & 0x3FFF] = prm_1 & 0xFF; return 0; }
-        if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && galuop & 0x80 && ispc8801 == true) { switch (galuop & 0x30) { case 0x00: for (int cnt = 0; cnt < 3; cnt++) { switch ((galuctrl >> cnt) & 0x11) { case 0x00: gvram[cnt][prm_0 & 0x3FFF] &= ~(prm_1 & 0xFF); break; case 0x01: gvram[cnt][prm_0 & 0x3FFF] |= (prm_1 & 0xFF); break; case 0x10: gvram[cnt][prm_0 & 0x3FFF] |= (prm_1 & 0xFF); break; } } break; case 0x10: gvram[0][prm_0 & 0x3FFF] = alutmp.c[0]; gvram[1][prm_0 & 0x3FFF] = alutmp.c[1]; gvram[2][prm_0 & 0x3FFF] = alutmp.c[2]; break; case 0x20: gvram[0][prm_0 & 0x3FFF] = alutmp.c[1]; break; case 0x30: gvram[1][prm_0 & 0x3FFF] = alutmp.c[0]; break; } return 0; }
-        if ((prm_0 & 0xFFFF) >= 0xF000 && fastesttvramenabled == true) { fastestvram[prm_0 & 0xFFF] = prm_1 & 0xFF; return 0; }
-        if ((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0x8400 && (rommode == true || biosromenabled == true) && ispc8801 == true && gvramenabled == 0) { if (fastesttvramenabled == true && (((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) >= 0xF000) { fastestvram[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) - 0xF000] = prm_1 & 0xFF; } else { memory[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF)] = prm_1 & 0xFF; } return 0; }
-        if ((arememorybankenabled & 0x10) && biosromenabled == false && ((prm_0 & 0xFFFF) < 0x8000)) { memory[prm_0 & 0xFFFF] = prm_1 & 0xFF; return 0; }
+        if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && (galuop & 0x80) && ispc8801 == true) { switch (galuop & 0x30) { case 0x00: for (int cnt = 0; cnt < 3; cnt++) { switch ((galuctrl >> cnt) & 0x11) { case 0x00: gvram[cnt][prm_0 & 0x3FFF] &= ~(prm_1 & 0xFF); break; case 0x01: gvram[cnt][prm_0 & 0x3FFF] |= (prm_1 & 0xFF); break; case 0x10: gvram[cnt][prm_0 & 0x3FFF] |= (prm_1 & 0xFF); break; } } break; case 0x10: gvram[0][prm_0 & 0x3FFF] = alutmp.c[0]; gvram[1][prm_0 & 0x3FFF] = alutmp.c[1]; gvram[2][prm_0 & 0x3FFF] = alutmp.c[2]; break; case 0x20: gvram[0][prm_0 & 0x3FFF] = alutmp.c[1]; break; case 0x30: gvram[1][prm_0 & 0x3FFF] = alutmp.c[0]; break; } return 0; }
+        if ((prm_0 & 0xFFFF) >= 0xF000 && fastesttvramenabled == true && ispc8801 == true) { fastestvram[prm_0 & 0xFFF] = prm_1 & 0xFF; return 0; }
+        if ((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0x8400 && (rommode == false || biosromenabled == false) && ispc8801 == true && gvramenabled == 0) { if (fastesttvramenabled == true && (((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) >= 0xF000) { fastestvram[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) - 0xF000] = prm_1 & 0xFF; } else { memory[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF)] = prm_1 & 0xFF; } return 0; }
+        if (((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0xC000) && gvramenabled >= 1 && ispc8801 == false) { gvram[gvramenabled - 1][prm_0 & 0x3FFF] = prm_1 & 0xFF; return 0; }
+        if ((arememorybankenabled & 0xF0) && biosromenabled == false && ((prm_0 & 0xFFFF) < 0x8000)) { if (arememorybankenabled & 0x10) { bankedmemory[0][prm_0 & 0x7FFF] = prm_1 & 0xFF; } if (arememorybankenabled & 0x20) { bankedmemory[1][prm_0 & 0x7FFF] = prm_1 & 0xFF; } if (arememorybankenabled & 0x40) { bankedmemory[2][prm_0 & 0x7FFF] = prm_1 & 0xFF; } if (arememorybankenabled & 0x80) { bankedmemory[3][prm_0 & 0x7FFF] = prm_1 & 0xFF; } return 0; }
         memory[prm_0 & 0xFFFF] = prm_1 & 0xFF;
         return 0;
         break;
     case 1:
-        if ((prm_0 & 0xFFFF) >= 0xF000 && fastesttvramenabled == true) { return fastestvram[prm_0 & 0xFFF]; }
-        if ((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0x8400 && (rommode == true || biosromenabled == true) && ispc8801 == true && gvramenabled == 0) { if (fastesttvramenabled == true && (((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) >= 0xF000) { return fastestvram[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) - 0xF000]; } else { return memory[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF)]; } }
-        if (((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0xC000) && gvramenabled >= 1 && ispc8801 == false) { return gvram[gvramenabled - 1][prm_0 & 0x3FFF]; }
         if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && gvramenabled >= 1 && ispc8801 == true) { return gvram[gvramenabled - 1][prm_0 & 0x3FFF]; }
-        if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && galuop & 0x80 && ispc8801 == true) { ALUFETCHBUF wk; alutmp.l = (gvram[0][prm_0 & 0x3FFF] << (8 * 0)) | (gvram[1][prm_0 & 0x3FFF] << (8 * 1)) | (gvram[2][prm_0 & 0x3FFF] << (8 * 2)); wk.l = alucomp.l ^ alutmp.l; return wk.c[0] & wk.c[1] & wk.c[2]; }
-        if ((arememorybankenabled & 0x01) && biosromenabled == false && ((prm_0 & 0xFFFF) < 0x8000)) { return memory[prm_0 & 0xFFFF]; }
+        if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && (galuop & 0x80) && ispc8801 == true) { ALUFETCHBUF wk; alutmp.l = (gvram[0][prm_0 & 0x3FFF] << (8 * 0)) | (gvram[1][prm_0 & 0x3FFF] << (8 * 1)) | (gvram[2][prm_0 & 0x3FFF] << (8 * 2)); wk.l = alucomp.l ^ alutmp.l; return wk.c[0] & wk.c[1] & wk.c[2]; }
+        if ((prm_0 & 0xFFFF) >= 0xF000 && fastesttvramenabled == true && ispc8801 == true) { return fastestvram[prm_0 & 0xFFF]; }
+        if ((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0x8400 && (rommode == false || biosromenabled == false) && ispc8801 == true && gvramenabled == 0) { if (fastesttvramenabled == true && (((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) >= 0xF000) { return fastestvram[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) - 0xF000]; } else { return memory[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF)]; } }
+        if (((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0xC000) && gvramenabled >= 1 && ispc8801 == false) { return gvram[gvramenabled - 1][prm_0 & 0x3FFF]; }
+        if ((arememorybankenabled & 0x0F) && biosromenabled == false && ((prm_0 & 0xFFFF) < 0x8000)) { if (arememorybankenabled & 0x01) { return bankedmemory[0][prm_0 & 0x7FFF]; } if (arememorybankenabled & 0x02) { return bankedmemory[1][prm_0 & 0x7FFF]; } if (arememorybankenabled & 0x04) { return bankedmemory[2][prm_0 & 0x7FFF]; } if (arememorybankenabled & 0x08) { return bankedmemory[3][prm_0 & 0x7FFF]; } return 0xFF; }
         if ((prm_0 & 0xFFFF) < 0x6000 && biosromenabled == false && (rommode == true || ispc8801 == false)) { return bios[prm_0 & 0x7FFF]; }
-        if ((prm_0 & 0xFFFF) < 0x8000 && biosromenabled == false && (rommode == false && ispc8801 == true)) { return n88rom[prm_0 & 0x7FFF]; }
-        if ((prm_0 & 0xFFFF) < 0x8000 && biosromenabled == false && romtype == true) { return n80rom[prm_0 & 0x1fff]; }
+        if ((prm_0 & 0xFFFF) < 0x8000 && biosromenabled == false && (rommode == true && ispc8801 == true)) { return n80rom[prm_0 & 0x1fff]; }
+        if ((prm_0 & 0xFFFF) < 0x8000 && biosromenabled == false && (rommode == false && ispc8801 == true)) { 
+            if ((extendedromsel == 0xff) || ((prm_0 & 0xFFFF) < 0x6000)) {
+                return n88rom[prm_0 & 0x7FFF];
+            }
+            else if ((~extendedromsel) & 0x01) {
+                return erom[0][eromsl][prm_0 & 0x1FFF];
+            }
+            else if ((~extendedromsel) & 0x02) {
+                return erom[1][eromsl][prm_0 & 0x1FFF];
+            }
+            else if ((~extendedromsel) & 0x04) {
+                return erom[2][eromsl][prm_0 & 0x1FFF];
+            }
+            else if ((~extendedromsel) & 0x08) {
+                return erom[3][eromsl][prm_0 & 0x1FFF];
+            }
+            else if ((~extendedromsel) & 0x10) {
+                return erom[4][eromsl][prm_0 & 0x1FFF];
+            }
+            else if ((~extendedromsel) & 0x20) {
+                return erom[5][eromsl][prm_0 & 0x1FFF];
+            }
+            else if ((~extendedromsel) & 0x40) {
+                return erom[6][eromsl][prm_0 & 0x1FFF];
+            }
+            else if ((~extendedromsel) & 0x80) {
+                return erom[7][eromsl][prm_0 & 0x1FFF];
+            }
+        }
+        if ((prm_0 & 0xFFFF) < 0x8000 && biosromenabled == false && romtype == true && ispc8801 == false) { return n80rom[prm_0 & 0x1fff]; }
         return memory[prm_0 & 0xFFFF];
         break;
     case 2:
@@ -1592,6 +1634,15 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             alucomp.l = ((galuop & 1) ? 0x000000ff : 0) | ((galuop & 2) ? 0x0000ff00 : 0) | ((galuop & 4) ? 0x00ff0000 : 0);
             break;
         case 0x40:
+            uopout = (prm_1 >> 6) & 0x03;
+            beepenabled = ((prm_1 >> 5) & 0x01)?true:false;
+                crtcldsclkenable = (prm_1 >> 3) & 0x01;
+                rtcclkenable = (prm_1 >> 2) & 0x01;
+                rtcstbenable = (prm_1 >> 1) & 0x01;
+                if (rtcstbenable == true) { rtcstrobe(); }
+                else { if (rtcclkenable == true) { rtcshift(); } }
+                prtenable = (prm_1 >> 0) & 0x01; prtstrobe();
+            break;
         case 0x41:
         case 0x42:
         case 0x43:
@@ -1607,25 +1658,20 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x4D:
         case 0x4E:
         case 0x4F:
-            uopout = (prm_1 >> 6) & 0x03;
-            beepenabled = ((prm_1 >> 5) & 0x01)?true:false;
-                crtcldsclkenable = (prm_1 >> 3) & 0x01;
-                rtcclkenable = (prm_1 >> 2) & 0x01;
-                rtcstbenable = (prm_1 >> 1) & 0x01;
-                if (rtcstbenable == true) { rtcstrobe(); }
-                else { if (rtcclkenable == true) { rtcshift(); } }
-                prtenable = (prm_1 >> 0) & 0x01; prtstrobe();
             break;
         case 0x50:
             uPD3301prm = prm_1;
                 if (seq){
                     switch (seq--) {
                     case 1:
+                        crtcatsc = (prm_1 >> 5) & 7;
                         colorgraphicmode = ((prm_1 >> 4) & 0x1) ? true : false;
                         crtcactive = 0;
                         break;
                     case 3:
-                        grpheight25 = ((prm_1 & 0x1f) < 9) ? true : false;
+                        if (ispc8801 == false) {
+                            grpheight25 = ((prm_1 & 0x1f) < 9) ? true : false;
+                        }
                         cursortype = ((prm_1 >> 5) & 3);
                         linespace = (prm_1 & 0x80) ? true : false;
                         break;
@@ -1643,6 +1689,11 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
                     case 7:
                         cursxtmp = prm_1;
                         break;
+                    case 8:
+                        upd3301stat = 0;
+                        upd31speclzsig = 0;
+                        seq = 0;
+                        break;
                     }
                 }
             break;
@@ -1651,11 +1702,22 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             switch (prm_1 & 0xE0){
             case 0x00:
                 seq = 5;
+                upd3301stat &= ~16;
+                upd3301stat |= 0x80;
                 crtcactive = 0;
                 break;
             case 0x20:
+                upd3301stat &= ~8;
+                upd3301stat |= 0x90;
                 crtcactive = 1;
                 crtcreverted = ((prm_1 & 1) ? true : false);
+                break;
+            case 0x40:
+                if (!(prm_1 & 1)) {
+                    upd3301stat = 0x80;
+                    upd31speclzsig = 0;
+                }
+                upd3301intm = prm_1 & 3;
                 break;
             case 0x60:
                 if (((prm_1 & 0xF)) == 0) { upd3301stat = upd3301stat & (0xFF - 1); upd31speclzsig = 1; }
@@ -1669,6 +1731,13 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
                 seq = 7;
             }
             break;
+            case 0xA0:
+                upd3301stat &= ~0x06;
+                break;
+            case 0xC0:
+                seq = 8;
+                upd3301stat &= ~0x06;
+                break;
         }
             break;
         case 0x52:
@@ -1686,11 +1755,11 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x5A:
         case 0x5B:
             if (palettemode == false) {
-                palette512_8bt[prm_0 - 0x54][0] = (((prm_1 & 1) ? 7 : 0) << (3 * 0)) | (((prm_1 & 2) ? 7 : 0) << (3 * 1));
-                palette512_8bt[prm_0 - 0x54][1] = (((prm_1 & 4) ? 7 : 0) << (3 * 0));
+                palette512_8bt[(prm_0 & 0xFF) - 0x54][0] = (((prm_1 & 1) ? 7 : 0) << (3 * 0)) | (((prm_1 & 2) ? 7 : 0) << (3 * 1));
+                palette512_8bt[(prm_0 & 0xFF) - 0x54][1] = (((prm_1 & 4) ? 7 : 0) << (3 * 0));
             }
             else {
-                palette512_8bt[prm_0 - 0x54][(prm_1 >> 6) & 3] = (prm_1 & 0x3F);
+                palette512_8bt[(prm_0 & 0xFF) - 0x54][(prm_1 >> 6) & 3] = (prm_1 & 0x3F);
             }
             break;
         case 0x5C:
@@ -1733,6 +1802,9 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             dmamodestat = prm_1;
             dmaseq = 2;
             break;
+        case 0x6F:
+            rs232crate = prm_1 & 0xF;
+            break;
         case 0x70:
             textwindoffsetadru8 = prm_1;
             break;
@@ -1744,6 +1816,9 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             break;
         case 0xE2:
             arememorybankenabled = prm_1;
+            break;
+        case 0xE4:
+            intmasklevel = prm_1 & 0x0F;
             break;
         case 0xE6:
             ioporte6h = prm_1;
@@ -1818,25 +1893,34 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             return uPD8251config[1] | (( rxdataready ? 1 : 0 ) << 1) | ( ( ( uPD8251config[3] & 1 ) ? 1 : 0) << 0 ) | ((serialstatw ? 1 : 0) << 0) | ((cmtreseted ? 1 : 0) << 7);
             break;
         case 0x30:
-        case 0x36:
-        case 0x38:
-        case 0x3A:
-        case 0x3C:
-        case 0x3E:
             return crtc2;
             break;
         case 0x31:
-        case 0x37:
-        case 0x39:
-        case 0x3B:
-        case 0x3D:
-        case 0x3F:
-            return ((bgcolor & 0x7) << 5) | ((colorfullgraphicmode ? 1 : 0) << 4) | ((fullgraphicdraw ? 1 : 0) << 3) | ((fullgrpmode ? 1 : 0) << 2) | ((biosromenabled ? 1 : 0) << 1) | ((romtype ? 1 : 0) << 0);
+            if (ispc8801 == true) {
+                return bsmode;
+            }
+            else {
+                return ((bgcolor & 0x7) << 5) | ((colorfullgraphicmode ? 1 : 0) << 4) | ((fullgraphicdraw ? 1 : 0) << 3) | ((fullgrpmode ? 1 : 0) << 2) | ((biosromenabled ? 1 : 0) << 1) | ((romtype ? 1 : 0) << 0);
+            }
             break;
         case 0x32:
             return ((soundintmask ? 1 : 0) << 7) | ((gvramaccessmode ? 1 : 0) << 6) | ((palettemode ? 1 : 0) << 5) | ((fastesttvramenabled ? 0 : 1) << 4) | ((videooutputmode & 3) << 2) | ((eromsl & 3) << 0);
             break;
+        case 0x36:
+        case 0x37:
+        case 0x38:
+        case 0x39:
+        case 0x3A:
+        case 0x3B:
+        case 0x3C:
+        case 0x3D:
+        case 0x3E:
+        case 0x3F:
+            return 0xff;
+            break;
         case 0x40:
+            return ((uipin & 3) << 6) | ((vbi ? 1 : 0) << 5) | ((rtcdata & 1) << 4) | ((fddconnected ? 0 : 1) << 3) | ((cmtdatard ? 1 : 0) << 2) | ((prtready ? 1 : 0) << 0);
+            break;
         case 0x41:
         case 0x42:
         case 0x43:
@@ -1852,7 +1936,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x4D:
         case 0x4E:
         case 0x4F:
-            return ((uipin & 3) << 6) | ((vbi ? 1 : 0) << 5) | ((rtcdata & 1) << 4) | ((fddconnected ? 0 : 1) << 3) | ((cmtdatard ? 1 : 0) << 2) | ((prtready ? 1 : 0) << 0);
+            return 0xff;
             break;
         case 0x50:
             if (upd31speclzsig == 0) { return uPD3301prm; }
@@ -1903,6 +1987,12 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x68:
             return dmamodestat | ((1 << 4) * ((clockcount % 19) > 9));
             break;
+        case 0x6E:
+            return (is8mhz ? 0x7F : 0xFF);
+            break;
+        case 0x6F:
+            return rs232crate & 0xF;
+            break;
         case 0x70:
             return textwindoffsetadru8;
             break;
@@ -1910,7 +2000,12 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             return extendedromsel;
             break;
         case 0xE2:
-            return arememorybankenabled & 0x0F;
+            if (ispc8801 == true) {
+                return ~arememorybankenabled;
+            }
+            else {
+                return ~(arememorybankenabled & 0x0F);
+            }
             break;
         case 0xE6:
             return ioporte6h;
@@ -1947,10 +2042,12 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
 int crtcmemaccess(int prm_0, int prm_1, int prm_2) {
     switch (prm_2) {
     case 0:
+        if ((prm_0 & 0xFFFF) >= 0xF000 && (bsmode & 0x40) && ispc8801 == true) { fastestvram[prm_0 & 0xFFF] = prm_1 & 0xFF; return fastestvram[prm_0 & 0xFFF]; }
         memory[prm_0 & 0xFFFF] = prm_1 & 0xFF;
         return 0;
         break;
     case 1:
+        if ((prm_0 & 0xFFFF) >= 0xF000 && (bsmode & 0x40) && ispc8801 == true) { return fastestvram[prm_0 & 0xFFF]; }
         return memory[prm_0 & 0xFFFF];
         break;
     }
@@ -1976,12 +2073,14 @@ HWND hwnd4mw;
 uint8 z80irqid = 0;
 uint8 z80irqfn = 0;
 
+uint8 z80irqmaxes = 8;
+
 extern void DrawGrp();
 
-void RunZ80Infinity(LPVOID* arg4rz80) { SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal = 0; GetSystemTime(&st_st); UINT32 Z80Corepfclock = (graphicdraw ? 1830000 : 4000000); while (clockcountinternal < Z80Corepfclock) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } vbi = true; clockcountinternal += (GN80.Execute((Z80Corepfclock / 3 / 60)) + Z80Corepfclock); vbi = false; clockcountinternal += (GN80.Execute((Z80Corepfclock / 3 / 60) * 2) + Z80Corepfclock); /*vbi = vbi ? false : true;*/ } clockcount += clockcountinternal; /*drawgrpbool = true;*/ GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < 16) { Sleep(16 - ststgoal16); } }/*while (z80timerbefore == time(NULL)) {}*/ } }//UINT32 z80timemintab[2] = { 0, 0 }; SYSTEMTIME z80timeminta; while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal = 0; GetSystemTime(&z80timeminta); z80timemintab[0] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); while (clockcountinternal < (graphicdraw ? 183000 : 400000)) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } clockcountinternal += Z80Run(); vbi = vbi ? false : true; } GetSystemTime(&z80timeminta); z80timemintab[1] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); clockcount += clockcountinternal; int timetowaitive = (z80timemintab[1] - z80timemintab[0]); /*if (timetowaitive < 0) { timetowaitive += 1000; }*/ if ((timetowaitive > 0) && (timetowaitive <= 100)) { Sleep(100 - timetowaitive); } else { Sleep(100); } } int z80timerint = time(NULL) - z80timerbefore; /*if (z80timerint < 1000) { Sleep(1000 - z80timerint); }*/ } }
+void Z80INT(uint8 prm_0) { if (((intmasklevel & 0x8) == 0 && ((prm_0 / 2) >= (intmasklevel & 0x7)))/* || ((intmasklevel & 0x8) && ((prm_0 / 2) > z80irqmaxes))*/) { return; } z80irqmaxes = prm_0 / 2; Z80DoIRQ(prm_0); /*z80irqid = 1; z80irqfn = prm_0;*/ }
+void Z80NMI() { Z80DoNMI();/*z80irqid = 2;*/ }
 
-void Z80INT(uint8 prm_0) { z80irqid = 1; z80irqfn = prm_0; }
-void Z80NMI() { z80irqid = 2; }
+void RunZ80Infinity(LPVOID* arg4rz80) { SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < ((is8mhz ? 2 : 1) * (graphicdraw ? 1830000 : 4000000))) { clockcountinternal = 0; GetSystemTime(&st_st); UINT32 Z80Corepfclock = (graphicdraw ? 1830000 : 4000000); while (clockcountinternal < Z80Corepfclock) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } vbi = false; clockcountinternal += (GN80.Execute((Z80Corepfclock / 3 / 60) * 2) + Z80Corepfclock); z80irqmaxes = 8; vbi = true; if (ioporte6h & 2) { if ((upd3301stat & 0x10) && !(upd3301intm & 1)) { upd3301stat |= 2; } Z80INT(2); z80irqmaxes = 8; } clockcountinternal += (GN80.Execute((Z80Corepfclock / 3 / 60)) + Z80Corepfclock); z80irqmaxes = 8; /*vbi = vbi ? false : true;*/ } clockcount += clockcountinternal; /*drawgrpbool = true;*/ GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < 16) { Sleep(16 - ststgoal16); } }/*while (z80timerbefore == time(NULL)) {}*/ } }//UINT32 z80timemintab[2] = { 0, 0 }; SYSTEMTIME z80timeminta; while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal = 0; GetSystemTime(&z80timeminta); z80timemintab[0] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); while (clockcountinternal < (graphicdraw ? 183000 : 400000)) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } clockcountinternal += Z80Run(); vbi = vbi ? false : true; } GetSystemTime(&z80timeminta); z80timemintab[1] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); clockcount += clockcountinternal; int timetowaitive = (z80timemintab[1] - z80timemintab[0]); /*if (timetowaitive < 0) { timetowaitive += 1000; }*/ if ((timetowaitive > 0) && (timetowaitive <= 100)) { Sleep(100 - timetowaitive); } else { Sleep(100); } } int z80timerint = time(NULL) - z80timerbefore; /*if (z80timerint < 1000) { Sleep(1000 - z80timerint); }*/ } }
 
 void BeepService(LPVOID* arg4bs) { while (true) { if (beepenabled) { /*Beep(2400, 100);*/ beep2400play(); } else { beep2400stop(); } /*if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); }*/ } }
 void PC8012Service(LPVOID* arg4bs) { 
@@ -2388,7 +2487,7 @@ void RTIService(LPVOID* arg4rtisv) { while (true) { if (ioporte6h & 1) { Z80INT(
 void __stdcall serialdaemon(void* prm_0) {
     COMSTAT tempcomstate;
     while (true) {
-        if (ttyconnected == true) { if (rxdataready == false) { if (cmtfileloc != 0) { ClearCommError(cmtfileloc, 0, &tempcomstate); if (tempcomstate.cbInQue != 0) { ReadFile(cmtfileloc, &serialchar, 1, 0, 0); rxdataready = true; } } serialstat = true; } }
+        if (ttyconnected == true) { if (rxdataready == false) { if (cmtfileloc != 0) { ClearCommError(cmtfileloc, 0, &tempcomstate); if (tempcomstate.cbInQue != 0) { ReadFile(cmtfileloc, &serialchar, 1, 0, 0); rxdataready = true; if (ioporte6h & 4) { Z80INT(0); } } } serialstat = true; } }
     }
 }
 
@@ -2400,18 +2499,20 @@ uint8 color4draw = 0;
 UINT8 prevchar[256];
 
 void myFillRect(HDC prm_0,const RECT* prm_2, HBRUSH prm_3) {
+    if (pBit == 0) { return; }
     UINT32 colorpaletmp = GetBrushColor(prm_3);
     colorpaletmp = (((colorpaletmp >> (8 * 0)) & 0xFF) << (8 * 2)) | (((colorpaletmp >> (8 * 1)) & 0xFF) << (8 * 1)) | (((colorpaletmp >> (8 * 2)) & 0xFF) << (8 * 0));
     for (int cnt2 = prm_2->left; cnt2 < prm_2->right; cnt2++) {
         for (int cnt = prm_2->top; cnt < prm_2->bottom; cnt++) {
-            if (cnt <= 479 && cnt2 <= 639) {
+            if (cnt <= 479 && cnt2 <= 639 && cnt >= 0 && cnt2 >= 0) {
                 (*(UINT32*)(&pBit[((479 - cnt) * (640 * 4)) + (cnt2 * 4)])) = colorpaletmp;
             }
         }
     }
 }
 
-void SetPalette4emu(int prm_0) { color4draw = prm_0+(greenmonitor?128:0); }
+void SetPalette4emu(int prm_0) { color4draw = prm_0 + (greenmonitor ? 128 : 0); }
+void SetPalette4emu2(int prm_0) { color4draw = prm_0 + (greenmonitor ? 768 : 256); }
 
 void SetPset2(int prm_0, int prm_1) {
     xsiz10times = colorfullgraphicmode ? 200 : 100; ysiz10times = (hiresgrpresol200 == false && ispc8801 == true) ? 120 : 240;
@@ -2524,7 +2625,7 @@ void SetBGCL(){
     rs.top = 0;
     rs.right = 640;
     rs.bottom = 480;
-    FillRect(hCDC, &rs, hBackGround[color4draw]);
+    myFillRect(hCDC, &rs, hBackGround[color4draw]);
 }
 
 
@@ -2575,8 +2676,10 @@ bool mousemvenabled = false;
 uint8 graphiccodes[(80*25)][2];
 
 void DrawGrp() {
+    charattribute = 0;
+    if (biosromenabled == false && (rommode == false && ispc8801 == true)) { charattribute = 4; }
     if (ispc8801 == true) {
-        for (int cnt = 0; cnt < 8; cnt++) { DeleteObject(hBackGround[cnt + 64]); DeleteObject(hBackGround[cnt + 64 + 128]); DeleteObject(hBackGround[cnt + 72]); DeleteObject(hBackGround[cnt + 72 + 128]); hBackGround[cnt + 64] = CreateSolidBrush(RGB(((palette512_8bt[cnt][0] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][1] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][0] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 72] = CreateSolidBrush(RGB(((palette512_8bt[cnt][2] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][3] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][2] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 64 + 128] = CreateSolidBrush(RGB(0, (((((palette512_8bt[cnt][0] >> 3) & 7) + ((palette512_8bt[cnt][1] >> 0) & 7) + ((palette512_8bt[cnt][0] >> 0) & 7)) / 3) * 28) + 3, 0)); hBackGround[cnt + 72 + 128] = CreateSolidBrush(RGB(0, (((((palette512_8bt[cnt][2] >> 3) & 7) + ((palette512_8bt[cnt][3] >> 0) & 7) + ((palette512_8bt[cnt][2] >> 0) & 7)) / 3) * 28) + 1, 0)); }
+        for (int cnt = 0; cnt < 8; cnt++) { DeleteObject(hBackGround[cnt + 64]); DeleteObject(hBackGround[cnt + 64 + 128]); DeleteObject(hBackGround[cnt + 72]); DeleteObject(hBackGround[cnt + 72 + 128]); hBackGround[cnt + 64] = CreateSolidBrush(RGB(((palette512_8bt[cnt][0] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][1] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][0] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 72] = CreateSolidBrush(RGB(((palette512_8bt[cnt][2] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][3] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][2] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 64 + 128] = CreateSolidBrush(RGB(0, ((((((palette512_8bt[cnt][0] >> 3) & 7) + ((palette512_8bt[cnt][1] >> 0) & 7) + ((palette512_8bt[cnt][0] >> 0) & 7)) / 3) + 1) * 28) + 3, 0)); hBackGround[cnt + 72 + 128] = CreateSolidBrush(RGB(0, ((((((palette512_8bt[cnt][2] >> 3) & 7) + ((palette512_8bt[cnt][3] >> 0) & 7) + ((palette512_8bt[cnt][2] >> 0) & 7)) / 3) + 1) * 28), 0)); }
         for (int cnt = 0; cnt < 256; cnt++) {
             palette32[cnt] = GetBrushColor(hBackGround[cnt]);
         }
@@ -2592,23 +2695,47 @@ void DrawGrp() {
         SetBGCL();
         for (chkedbb8 = 0; chkedbb8 < (((dmatc[2] & 0x3FFF) >= 0xbb8) ? (((dmatc[2] & 0x3FFF) / 0xbb8) + 1) : 1); chkedbb8++) {
             bool breakdowndgp = false;
+            UINT8 charattributetmp4backupforlater = 0;
 
             for (int drawbacky = 0; drawbacky < 25; drawbacky++) {
                 for (int drawbackx = 0; drawbackx < 80; drawbackx++) {
                     uint8 char4show = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx)+(drawbacky * 120)), 0, 1);
                     attributetmp = -1; attributeold = -1; fontcolors = 0; grpcolors = 0; attributegcold = false;
                     attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
-                    for (int cnt = 0; cnt < 20; cnt++) {
-                        uint8 charattributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if (attributetmp <= drawbackx && attributetmp > attributeold) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if ((attributetmp3 <= drawbackx && attributetmp3 > attributeold3) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
+                    if (crtcatsc != 1) {
+                        if (crtcatsc & 4) {
+                            for (int cnt = 0; cnt < 120; cnt++) {
+                                if ((crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 1) + 0) + (drawbacky * 120)), 0, 1) & 0x80)) { if (ioporte6h & 2) { if ((upd3301stat & 0x10) && !(upd3301intm & 2)) { upd3301stat |= 4; } Z80INT(2); } charattribute = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 1) + 0) + (drawbacky * 120)), 0, 1) & 0x7F; }
+                            }
+                        }
+                        else {
+                            for (int cnt = 0; cnt < 20; cnt++) {
+                                uint8 charattributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if (attributetmp <= drawbackx && attributetmp > attributeold) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if ((attributetmp3 <= drawbackx && attributetmp3 > attributeold3) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
+                            }
+                        }
+                        if (semigraphicenabled == true) { charattribute |= 128; }
+#if 1
+                        if ((colorfullgraphicmode == false && fullgraphicdraw == true) && ispc8801 == true) {
+                            graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute ^ (4 ^ (crtcreverted ? 4 : 0));
+                        }
+                        else {
+                            graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute ^ (crtcreverted ? 4 : 0);
+                        }
+#endif
+                        if (biosromenabled == false && (rommode == false && ispc8801 == true)) { graphiccodes[(80 * drawbacky) + drawbackx][0] ^= 4; }
+                        //graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute ^ (crtcreverted ? 4 : 0);
+                        graphiccodes[(80 * drawbacky) + drawbackx][1] = grpcolors;
                     }
-                    if (semigraphicenabled == true) { charattribute |= 128; }
-                    graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute;
-                    graphiccodes[(80 * drawbacky) + drawbackx][1] = grpcolors;
+                    else {
+                        graphiccodes[(80 * drawbacky) + drawbackx][0] = 0;
+                        graphiccodes[(80 * drawbacky) + drawbackx][1] = 0;
+                    }
                 }
             }
+            upd3301stat |= 8;
             if (fullgraphicdraw == true) {
 
-                for (int drawbacky = 0; drawbacky < ((hiresgrpresol200 == false && ispc8801 == true) ? 50 : 25); drawbacky++) {
+                for (int drawbacky = 0; drawbacky < (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 50 : 25); drawbacky++) {
                     for (int drawbackx = 0; drawbackx < (colorfullgraphicmode ? 40 : 80); drawbackx++) {
                         //if (((chkedbb8 * 0xbb8) + ((drawbackx * (colorfullgraphicmode ? 2 : 1)) + (drawbacky * 120))) > (dmatc[2] & 0x3FFF)) { breakdowndgp = true; break; }
                         uint8 char4show = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx * (colorfullgraphicmode ? 2 : 1)) + ((drawbacky / ((hiresgrpresol200 == false && ispc8801 == true) ? 2 : 1)) * 120)), 0, 1);
@@ -2620,10 +2747,34 @@ void DrawGrp() {
                         }
                         if (semigraphicenabled == true) { charattribute |= 128; }
 #endif
-                        charattribute = (graphiccodes[(80 * (drawbacky / ((hiresgrpresol200 == false && ispc8801 == true) ? 2 : 1))) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][0]) ^ (crtcreverted ? 4 : 0);
-                        fontcolors = graphiccodes[(80 * (drawbacky / ((hiresgrpresol200 == false && ispc8801 == true) ? 2 : 1))) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][1] & 7; grpcolors = graphiccodes[(80 * (drawbacky / ((hiresgrpresol200 == false && ispc8801 == true) ? 2 : 1))) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][1] & 7;
+                        charattribute = (graphiccodes[(80 * (drawbacky / (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][0]);
+                        fontcolors = graphiccodes[(80 * (drawbacky / (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][1] & 7; grpcolors = graphiccodes[(80 * (drawbacky / ((hiresgrpresol200 == false && ispc8801 == true) ? 2 : 1))) + (drawbackx * (colorfullgraphicmode ? 2 : 1))][1] & 7;
                         //grpcolors = 9;
                         if (ispc8801 == true) {
+                            if (colorfullgraphicmode == true && hiresgrpresol200 == true) {
+                                //SetPalette4emu2(((UINT32)palette512_8bt[0][0] & 0x3F) | (((UINT32)palette512_8bt[0][1] & 0x7) << 6));
+                                SetPalette4emu(64);
+                                SetBox2(((drawbackx + 0) * 8), ((drawbacky + 0) * (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) - 0);
+                                for (int cnt = 0; cnt < (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1)); cnt++) {
+                                    for (int cnt2 = 0; cnt2 < 8; cnt2++) {
+                                        if ((((showstatefor88grp & 2) ? 0 : (((gvram[0][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 7)) | ((showstatefor88grp & 4) ? 0 : (((gvram[1][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 6)) | ((showstatefor88grp & 8) ? 0 : (((gvram[2][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 5))) != 0) {
+                                            //SetPalette4emu2(((UINT32)palette512_8bt[(((showstatefor88grp & 2) ? 0 : (((gvram[0][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 7)) | ((showstatefor88grp & 4) ? 0 : (((gvram[1][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 6)) | ((showstatefor88grp & 8) ? 0 : (((gvram[2][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 5)))][0] & 0x3F) | (((UINT32)palette512_8bt[(((showstatefor88grp & 2) ? 0 : (((gvram[0][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) << 0)) | ((showstatefor88grp & 4) ? 0 : (((gvram[1][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) << 1)) | ((showstatefor88grp & 8) ? 0 : (((gvram[2][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) << 2)))][1] & 0x7) << 6));
+                                            SetPalette4emu((((showstatefor88grp & 2) ? 0 : (((gvram[0][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 7)) | ((showstatefor88grp & 4) ? 0 : (((gvram[1][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 6)) | ((showstatefor88grp & 8) ? 0 : (((gvram[2][(drawbackx * 8) + (drawbacky * (640 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + (cnt * 80)] << cnt2) & 0x80) >> 5))) + 64);
+                                            SetPset2((drawbackx * 8) + cnt2, (drawbacky * (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + cnt);
+                                        }
+                                    }
+                                }
+                            }
+                            else {
+                                SetPalette4emu((graphiccodes[(80 * (((((drawbacky * 10) / (grpheight25 ? 16 : 20)) / 10) + 0) / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7) + 64);
+                                //SetPalette4emu2((((UINT32)palette512_8bt[(graphiccodes[(80 * (((((drawbacky * 10) / (grpheight25 ? 16 : 20)) / 10) + 0) / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7)][0] & 0x3F) << 0) | (((UINT32)palette512_8bt[(graphiccodes[(80 * (((((drawbacky * 10) / (grpheight25 ? 16 : 20)) / 10) + 0) / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7)][1] & 0x3F) << 6));
+                                for (int cnt = 0; cnt < (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1)); cnt++) {
+                                    for (int cnt2 = 0; cnt2 < 8; cnt2++) {
+                                        if ((((gvram[0][(drawbackx * 8) + (drawbacky * 640) + (cnt * 80)] << cnt2) & 0x80) && drawbacky < 25) && ((showstatefor88grp & 2) == 0)) { SetPset2((drawbackx * 8) + cnt2, (drawbacky * (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + cnt); }
+                                        else if ((((gvram[1][(drawbackx * 8) + (drawbacky * 640) + (cnt * 80)] << cnt2) & 0x80) && drawbacky >= 25) && ((showstatefor88grp & 4) == 0)) { SetPset2((drawbackx * 8) + cnt2, (drawbacky * (8 * (((hiresgrpresol200 == false || (hiresgrpresol200 == true && colorfullgraphicmode == false)) && ispc8801 == true) ? 2 : 1))) + cnt + 200); }
+                                    }
+                                }
+                            }
                         }
                         else {
                             if (fullgrpmode == true && colorfullgraphicmode == false) {
@@ -2697,7 +2848,7 @@ void DrawGrp() {
                             if (semigraphicenabled == true) { charattribute |= 128; }
 #endif
                             attributegcold = false;
-                            charattribute = (graphiccodes[(80 * (drawbacky / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][0]) ^ (crtcreverted ? 4 : 0);
+                            charattribute = (graphiccodes[(80 * (drawbacky / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][0]);
                             fontcolors = graphiccodes[(80 * (drawbacky / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7; grpcolors = graphiccodes[(80 * (drawbacky / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7;
 #if 0
                             if (charattribute & 4) { if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } } else { SetPalette4emu(9); } }
@@ -2742,6 +2893,7 @@ void DrawGrp() {
                     }
                     if (breakdowndgp == true) { break; }
                 }
+                else { upd3301stat |= 8; upd3301stat &= ~16; }
             }
 
         }
@@ -2922,19 +3074,25 @@ void ResetEmu() {
     kanjiromaddr2 = 0;
 
     linecharnum = 0;
+    intmasklevel = 0xf;
+    crtcatsc = 0;
+    upd3301intm = 0;
 
     arememorybankenabled = 0;
+    rs232crate = 0;
 
     if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
 
     memset(memory, 0, 65536);
     memset(fddcmemory, 0, 16384);
+    memset(bankedmemory, 0, 0x8000 * 4);
 
     GN8012_i8255.init_i8255();
     GN8012_i8272.init_i8272a();
     GN8012.Reset();
 
     GN80_i8255.init_i8255();
+    z80irqmaxes = 8;
 
     Z80Init();
 }
@@ -3024,6 +3182,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
         }
     }
 
+    for (int cnt = 0; cnt < 16; cnt++) { memset(erom[cnt % 4][cnt / 4], 0xff, 0x2000); }
+
     FILE* biosfile = fopen("nbasic.rom", "rb");
     if (biosfile != 0) {
         fread(bios, 0x6000, 1, biosfile);
@@ -3041,14 +3201,44 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
         if (biosfile != 0) {
             ispc8801 = true;
             fread(n88rom, 0x8000, 1, biosfile);
+            fread(n80rom, 0x2000, 1, biosfile);
+            fseek(biosfile, 0x2000, SEEK_CUR);
+            fread(erom[0][0], 0x2000, 1, biosfile);
+            fread(erom[0][1], 0x2000, 1, biosfile);
+            fread(erom[0][2], 0x2000, 1, biosfile);
+            fread(erom[0][3], 0x2000, 1, biosfile);
+            fseek(biosfile, 0x2000, SEEK_CUR);
+            fread(bios, 0x6000, 1, biosfile);
             fclose(biosfile);
-            FILE* biosfile = fopen("n80.rom", "rb");
+            FILE* biosfile = fopen("n80basic.rom", "rb");
             if (biosfile != 0) {
                 fread(bios, 0x6000, 1, biosfile);
                 fread(n80rom, 0x2000, 1, biosfile);
                 fclose(biosfile);
+                n80_8000 = true;
             }
-            else { n80_8000 = true; }
+            biosfile = fopen("n88_0.rom", "rb");
+            if (biosfile != 0) {
+                fread(erom[0][0], 0x2000, 1, biosfile);
+                fclose(biosfile);
+            }
+            biosfile = fopen("n88_1.rom", "rb");
+            if (biosfile != 0) {
+                fread(erom[0][1], 0x2000, 1, biosfile);
+                fclose(biosfile);
+            }
+            biosfile = fopen("n88_2.rom", "rb");
+            if (biosfile != 0) {
+                fread(erom[0][2], 0x2000, 1, biosfile);
+                fclose(biosfile);
+            }
+            biosfile = fopen("n88_3.rom", "rb");
+            if (biosfile != 0) {
+                fread(erom[0][3], 0x2000, 1, biosfile);
+                fclose(biosfile);
+            }
+            crtc2 = 0xd2;
+            bsmode = 0x2b;
         }
         else {
 
@@ -3229,7 +3419,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    hbOld = (HBITMAP)SelectObject(hCDC, hbDib);
    hCBitmapfullscr = CreateCompatibleBitmap(hdcfullscr, 640, 480);
    hPen = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
-   for (int cnt = 0; cnt < 256; cnt++) {
+   for (int cnt = 0; cnt < 1280; cnt++) {
        if (cnt < 8) { hBackGround[cnt] = CreateSolidBrush(RGB(((cnt >> 1) & 1) * 255, ((cnt >> 2) & 1) * 255, ((cnt >> 0) & 1) * 255)); }
        else if (cnt == 8) { hBackGround[cnt] = CreateSolidBrush(RGB(0, 0, 0)); }
        else if (cnt == 9) { hBackGround[cnt] = CreateSolidBrush(RGB(255, 255, 255)); }
@@ -3249,6 +3439,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
        else if (cnt == (40 + 128)) { hBackGround[cnt] = CreateSolidBrush(RGB(1, 28 + 1, 1)); }
        else if (cnt == (41 + 128)) { hBackGround[cnt] = CreateSolidBrush(RGB(0, 253, 0)); }
        else if (cnt < (128 + 128)) { hBackGround[cnt] = CreateSolidBrush(RGB(0, 0, 0)); }
+       else if (cnt > 255 && cnt < 768) { hBackGround[cnt] = CreateSolidBrush(RGB(((((cnt - 256) >> 3) & 7) * 31), ((((cnt - 256) >> 6) & 7) * 31), ((((cnt - 256) >> 0) & 7) * 31))); }
+       else if (cnt > 767 && cnt < 1280) { hBackGround[cnt] = CreateSolidBrush(RGB(0, (((((((cnt - 768) >> 3) & 7) + 1) * 28) + (((((cnt - 768) >> 6) & 7) + 1) * 28) + (((((cnt - 768) >> 0) & 7) + 1) * 28)) / 3), 0)); }
        else { hBackGround[cnt] = CreateSolidBrush(RGB(0, 33, 0)); }
    }
    for (int cnt = 0; cnt < 256; cnt++) {
@@ -3373,6 +3565,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
             case ID_DIPSW_N80:
                 crtc2 ^= 1;
+                break;
+            case ID_DIPSW_STANDARD:
+                bsmode ^= 0x40;
+                break;
+            case ID_DIPSW_V1:
+                bsmode ^= 0x80;
+                break;
+            case ID_DIPSW_4MHZ:
+                is8mhz = is8mhz ? false : true;
                 break;
             case ID_32778:
                 ttyconnected = false;
