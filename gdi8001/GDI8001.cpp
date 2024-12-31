@@ -2523,7 +2523,7 @@ void SetPset2(int prm_0, int prm_1) {
         rs.left = (((prm_0 + 0) * xsiz10times) / 100);
         rs.top = ((((prm_1 * 2) + 0) * ysiz10times) / 100);
         rs.right = (((prm_0 + 1) * xsiz10times) / 100);
-        rs.bottom = ((((prm_1 * 2) + 1) * ysiz10times) / 100);
+        rs.bottom = ((((prm_1 * 2) + 3) * ysiz10times) / 100);
     }
     else {
         rs.left = (((prm_0 + 0) * xsiz10times) / 100);
@@ -2572,7 +2572,7 @@ void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
                 rs.left = (((prm_0 + 0) * xsiz10times) / 100);
                 rs.top = ((((cnt * 2) + 0) * ysiz10times) / 100);
                 rs.right = (((prm_2 + 0) * xsiz10times) / 100);
-                rs.bottom = ((((cnt * 2) + 1) * ysiz10times) / 100);
+                rs.bottom = ((((cnt * 2) + 3) * ysiz10times) / 100);
                 myFillRect(hCDC, &rs, hbkgtmp);
             }
         }
@@ -2597,7 +2597,7 @@ void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
                 rs.left = (((prm_0 + 0) * xsiz10times) / 100);
                 rs.top = ((((cnt * 2) + 0) * ysiz10times) / 100);
                 rs.right = (((prm_2 + 0) * xsiz10times) / 100);
-                rs.bottom = ((((cnt * 2) + 1) * ysiz10times) / 100);
+                rs.bottom = ((((cnt * 2) + 3) * ysiz10times) / 100);
                 myFillRect(hCDC, &rs, hBackGround[color4draw]);
             }
         }
