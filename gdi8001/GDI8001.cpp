@@ -2722,7 +2722,10 @@ void DrawGrp() {
         }
         else {
             if (crtmodectrl == false) {
-                if (ispc8801 == true) { SetPalette4emu(72 + bgcolor); }
+                if (ispc8801 == true) {
+                    if (palettemode == false) { SetPalette4emu(32 + bgcolor); }
+                    else { SetPalette4emu(72 + bgcolor); }
+                }
                 else { SetPalette4emu(32 + bgcolor); }
             }
             else { SetPalette4emu(32 + 8); }
