@@ -2706,10 +2706,11 @@ bool mousemvenabled = false;
 uint8 graphiccodes[(80*25)][2];
 
 uint8 colorbool[25];
+uint8 charattributefinal = 0;
 
 void DrawGrp() {
     charattribute = 0;
-    if (biosromenabled == false && (rommode == false && ispc8801 == true)) { charattribute = 4; }
+    if (charattributefinal & 4) { charattribute = 4; }
     if (ispc8801 == true) {
         for (int cnt = 0; cnt < 8; cnt++) { DeleteObject(hBackGround[cnt + 64]); DeleteObject(hBackGround[cnt + 64 + 128]); DeleteObject(hBackGround[cnt + 72]); DeleteObject(hBackGround[cnt + 72 + 128]); hBackGround[cnt + 64] = CreateSolidBrush(RGB(((palette512_8bt[cnt][0] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][1] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][0] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 72] = CreateSolidBrush(RGB(((palette512_8bt[cnt][2] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][3] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][2] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 64 + 128] = CreateSolidBrush(RGB(0, ((((((palette512_8bt[cnt][0] >> 3) & 7) + ((palette512_8bt[cnt][1] >> 0) & 7) + ((palette512_8bt[cnt][0] >> 0) & 7)) / 3) + 1) * 28) + 3, 0)); hBackGround[cnt + 72 + 128] = CreateSolidBrush(RGB(0, ((((((palette512_8bt[cnt][2] >> 3) & 7) + ((palette512_8bt[cnt][3] >> 0) & 7) + ((palette512_8bt[cnt][2] >> 0) & 7)) / 3) + 1) * 28), 0)); }
         for (int cnt = 0; cnt < 256; cnt++) {
@@ -2753,7 +2754,7 @@ void DrawGrp() {
                         }
                         if (semigraphicenabled == true) { charattribute |= 128; }
                         graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute ^ (crtcreverted ? 4 : 0);
-                        if (biosromenabled == false && (rommode == false && ispc8801 == true)) { graphiccodes[(80 * drawbacky) + drawbackx][0] ^= 4; }
+                        if (charattributefinal & 4) { graphiccodes[(80 * drawbacky) + drawbackx][0] ^= 4; }
                         //graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute ^ (crtcreverted ? 4 : 0);
                         graphiccodes[(80 * drawbacky) + drawbackx][1] = grpcolors;
                         colorbool[drawbacky] = grpcolors;
@@ -2765,6 +2766,7 @@ void DrawGrp() {
                     }
                 }
             }
+            charattributefinal = charattribute;
             upd3301stat |= 8;
             if (fullgraphicdraw == true) {
 
