@@ -189,6 +189,9 @@ uint8 kanjirom2[0x20000];
 uint16 kanjiromaddr1 = 0;
 uint16 kanjiromaddr2 = 0;
 uint8 erom[8][4][8192];
+uint8 dicrom[0x80000];
+
+uint8 dictromstat[2] = { 0,0xFF };
 
 uint8 pc8001keybool[0x10];
 
@@ -1487,6 +1490,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
     case 1:
         if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && gvramenabled >= 1 && ispc8801 == true) { return gvram[gvramenabled - 1][prm_0 & 0x3FFF]; }
         if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && (galuop & 0x80) && ispc8801 == true) { ALUFETCHBUF wk; alutmp.l = (gvram[0][prm_0 & 0x3FFF] << (8 * 0)) | (gvram[1][prm_0 & 0x3FFF] << (8 * 1)) | (gvram[2][prm_0 & 0x3FFF] << (8 * 2)); wk.l = alucomp.l ^ alutmp.l; return wk.c[0] & wk.c[1] & wk.c[2]; }
+        if ((dictromstat[1] & 1) == 0 && (((prm_0 & 0xC000) == 0xC000 && ispc8801 == true) || ((prm_0 & 0xC000) == 0x8000 && ispc8801 == false))) { return dicrom[(prm_0 & 0x3FFF) | ((dictromstat[0] & 0x1F) * 0x4000)]; }
         if ((prm_0 & 0xFFFF) >= 0xF000 && fastesttvramenabled == true && ispc8801 == true) { return fastestvram[prm_0 & 0xFFF]; }
         if ((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0x8400 && (rommode == false || biosromenabled == false) && ispc8801 == true && gvramenabled == 0) { if (fastesttvramenabled == true && (((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) >= 0xF000) { return fastestvram[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) - 0xF000]; } else { return memory[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF)]; } }
         if (((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0xC000) && gvramenabled >= 1 && ispc8801 == false) { return gvram[gvramenabled - 1][prm_0 & 0x3FFF]; }
@@ -1766,15 +1770,19 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             break;
         case 0x5C:
             gvramenabled = 1;
+            galuop &= 0x7F;
             break;
         case 0x5D:
             gvramenabled = 2;
+            galuop &= 0x7F;
             break;
         case 0x5E:
             gvramenabled = 3;
+            galuop &= 0x7F;
             break;
         case 0x5F:
             gvramenabled = 0;
+            galuop &= 0x7F;
             break;
         case 0x60:
             dmaas[0] = (dmaas[0] & (((dmachiocnt >> 0) & 1) ? 0x00FF : 0xFF00)) | ((prm_1 & 0xFF) << (((dmachiocnt >> 0) & 1) * 8)); dmachiocnt ^= (1 << 0);
@@ -1836,6 +1844,13 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             break;
         case 0xED:
             kanjiromaddr2 = (kanjiromaddr2 & 0x00FF) | (prm_1 << (8 * 1));
+            break;
+        case 0xF0:
+        case 0xF1:
+            if (((prm_1 & 0xFF) >= 0x20) && ((prm_0 & 1) == 0)) { return 0; }
+            if (((prm_1 & 0xFF) & 0xFE) && ((prm_0 & 1) == 1)) { return 0; }
+            dictromstat[prm_0 & 1] = prm_1 & 0xFF;
+            return 0;
             break;
         case 0xFC:
         case 0xFD:
@@ -3120,6 +3135,9 @@ void ResetEmu() {
     crtcatsc = 0;
     upd3301intm = 0;
 
+    dictromstat[0] = 0;
+    dictromstat[1] = 0xFF;
+
     arememorybankenabled = 0;
     rs232crate = 0;
     ispc8801mk2srormore = false;
@@ -3230,70 +3248,75 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
 
     for (int cnt = 0; cnt < 16; cnt++) { memset(erom[cnt % 4][cnt / 4], 0xff, 0x2000); }
 
-    FILE* biosfile = fopen("nbasic.rom", "rb");
+
+    FILE* biosfile = fopen("n88basic.rom", "rb");
     if (biosfile != 0) {
-        fread(bios, 0x6000, 1, biosfile);
+        ispc8801 = true;
+        fread(n88rom, 0x8000, 1, biosfile);
         fread(n80rom, 0x2000, 1, biosfile);
+        fseek(biosfile, 0x2000, SEEK_CUR);
+        fread(erom[0][0], 0x2000, 1, biosfile);
+        fread(erom[0][1], 0x2000, 1, biosfile);
+        fread(erom[0][2], 0x2000, 1, biosfile);
+        fread(erom[0][3], 0x2000, 1, biosfile);
+        fseek(biosfile, 0x2000, SEEK_CUR);
+        fread(bios, 0x6000, 1, biosfile);
         fclose(biosfile);
-        FILE* biosfile = fopen("n80.rom", "rb");
+        FILE* biosfile = fopen("n80basic.rom", "rb");
         if (biosfile != 0) {
+            fread(bios, 0x6000, 1, biosfile);
             fread(n80rom, 0x2000, 1, biosfile);
             fclose(biosfile);
+            n80_8000 = true;
         }
-        else { n80_8000 = true; }
+        biosfile = fopen("n88_0.rom", "rb");
+        if (biosfile != 0) {
+            fread(erom[0][0], 0x2000, 1, biosfile);
+            fclose(biosfile);
+        }
+        biosfile = fopen("n88_1.rom", "rb");
+        if (biosfile != 0) {
+            fread(erom[0][1], 0x2000, 1, biosfile);
+            fclose(biosfile);
+        }
+        biosfile = fopen("n88_2.rom", "rb");
+        if (biosfile != 0) {
+            fread(erom[0][2], 0x2000, 1, biosfile);
+            fclose(biosfile);
+        }
+        biosfile = fopen("n88_3.rom", "rb");
+        if (biosfile != 0) {
+            fread(erom[0][3], 0x2000, 1, biosfile);
+            fclose(biosfile);
+        }
+        crtc2 = 0xd2;
+        bsmode = 0xeb;
     }
     else {
-        FILE* biosfile = fopen("n88basic.rom", "rb");
+        FILE* biosfile = fopen("nbasic.rom", "rb");
         if (biosfile != 0) {
-            ispc8801 = true;
-            fread(n88rom, 0x8000, 1, biosfile);
-            fread(n80rom, 0x2000, 1, biosfile);
-            fseek(biosfile, 0x2000, SEEK_CUR);
-            fread(erom[0][0], 0x2000, 1, biosfile);
-            fread(erom[0][1], 0x2000, 1, biosfile);
-            fread(erom[0][2], 0x2000, 1, biosfile);
-            fread(erom[0][3], 0x2000, 1, biosfile);
-            fseek(biosfile, 0x2000, SEEK_CUR);
             fread(bios, 0x6000, 1, biosfile);
+            fread(n80rom, 0x2000, 1, biosfile);
             fclose(biosfile);
-            FILE* biosfile = fopen("n80basic.rom", "rb");
+            FILE* biosfile = fopen("n80.rom", "rb");
             if (biosfile != 0) {
-                fread(bios, 0x6000, 1, biosfile);
                 fread(n80rom, 0x2000, 1, biosfile);
                 fclose(biosfile);
-                n80_8000 = true;
             }
-            biosfile = fopen("n88_0.rom", "rb");
-            if (biosfile != 0) {
-                fread(erom[0][0], 0x2000, 1, biosfile);
-                fclose(biosfile);
-            }
-            biosfile = fopen("n88_1.rom", "rb");
-            if (biosfile != 0) {
-                fread(erom[0][1], 0x2000, 1, biosfile);
-                fclose(biosfile);
-            }
-            biosfile = fopen("n88_2.rom", "rb");
-            if (biosfile != 0) {
-                fread(erom[0][2], 0x2000, 1, biosfile);
-                fclose(biosfile);
-            }
-            biosfile = fopen("n88_3.rom", "rb");
-            if (biosfile != 0) {
-                fread(erom[0][3], 0x2000, 1, biosfile);
-                fclose(biosfile);
-            }
-            crtc2 = 0xd2;
-            bsmode = 0x2b;
+            else { n80_8000 = true; }
         }
         else {
-
             FILE* biosfile = fopen("n80basic.rom", "rb");
             if (biosfile != 0) {
                 fread(bios, 0x6000, 1, biosfile);
                 fclose(biosfile);
             }
         }
+    }
+    biosfile = fopen("dict.rom", "rb");
+    if (biosfile != 0) {
+        fread(dicrom, 0x80000, 1, biosfile);
+        fclose(biosfile);
     }
     FILE* fddbiosfile = fopen("n80s31.rom", "rb");
     if (fddbiosfile != 0) {
@@ -3617,6 +3640,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
             case ID_DIPSW_V1:
                 bsmode ^= 0x80;
+                crtc2 ^= 2;
                 break;
             case ID_DIPSW_4MHZ:
                 is8mhz = is8mhz ? false : true;
