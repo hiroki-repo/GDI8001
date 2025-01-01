@@ -2771,7 +2771,7 @@ void DrawGrp() {
             if (fullgraphicdraw == true) {
 
                 if (ispc8801 == true) {
-                    for (int drawbacky = 0; drawbacky < (grpheight25 ? 25 : 20); drawbacky++) {
+                    for (int drawbacky = 0; drawbacky < ((grpheight25 || ((colorfullgraphicmode == true && hiresgrpresol200 == true) && ispc8801 == true)) ? 25 : 20); drawbacky++) {
                         for (int drawbackx = 0; drawbackx < (pc8001widthflag ? (linecharnum + 2) : ((linecharnum + 2) / 2)); drawbackx++) {
                             if (colorfullgraphicmode == true && hiresgrpresol200 == true) {
                                 //SetPalette4emu2(((UINT32)palette512_8bt[0][0] & 0x3F) | (((UINT32)palette512_8bt[0][1] & 0x7) << 6));
