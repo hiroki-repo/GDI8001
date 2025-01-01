@@ -657,6 +657,7 @@ private:
         bool headsel;
         uint32 datalength;
         uint8 result;
+        bool delaccess;
     };
     strct_Drive Drive[4];
     uint8 i8272retstat;
@@ -716,12 +717,13 @@ private:
         statussize = 7;
         statuspos = 6;
         statcode[0] = (commandcode[1] & 7) | (Diskstat[commandcode[1] & 3].diskinserted ? 0 : 0x08) | ((Diskstat[commandcode[1] & 3].fddphyaccess == fddphyaccessx) ? 0x40 : 0);//ST0
-        statcode[1] = ((Diskstat[commandcode[1] & 3].isprotected && (commandcode[0] & 1)) ? 2 : 0) | (Diskstat[commandcode[1] & 3].diskinserted ? 0 : 0x01);//ST1
-        statcode[2] = ((scancommandstat & 3) << 2);//ST2
+        statcode[1] = ((Diskstat[commandcode[1] & 3].isprotected && (commandcode[0] & 1)) ? 2 : 0) | (Diskstat[commandcode[1] & 3].diskinserted ? 0 : 0x01) | (Drive[commandcode[1] & 3].delaccess ? 0x80 : 0);//ST1
+        statcode[2] = ((scancommandstat & 3) << 2) | (Drive[commandcode[1] & 3].delaccess ? 0x40 : 0);//ST2
         statcode[3] = Drive[commandcode[1] & 3].cylinder;//C
         statcode[4] = Drive[commandcode[1] & 3].heada;//H
         statcode[5] = Drive[commandcode[1] & 3].recorda;//R
         statcode[6] = Drive[commandcode[1] & 3].numofwr;//N
+        Drive[commandcode[1] & 3].delaccess = false;
     }
     bool id_incr()
     {
@@ -792,6 +794,7 @@ public:
             Drive[cnt].headsel = false;
             Drive[cnt].datalength = 0;
             Drive[cnt].result = 0;
+            Drive[cnt].delaccess = false;
         }
         commandpos = 0;
         for (int cnt = 0; cnt < 32; cnt++) {
@@ -931,11 +934,19 @@ public:
                         if (commandsize[commandcode[0] & 31] <= commandpos) {
                             switch (commandcode[0] & 31) {
                             case 2://Read a Track
+                                Drive[commandcode[1] & 3].delaccess = false;
                                 get_i8272_param();
                                 i8272astatus &= ~(1 << (commandcode[1] & 3));
                                 i8272astatus = 0x10 | 0x20 | 0x40 | 0x80;
                                 Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
-                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                if (Diskstat[commandcode[1] & 3].fddphyaccess(Drive[latestdisk].diskpos, prm_1, Drive[latestdisk].recorda, Drive[commandcode[1] & 3].cylinder, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 3) & 1) {
+                                    Drive[commandcode[1] & 3].delaccess = true;
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else if (Diskstat[commandcode[1] & 3].diskinserted == false) {
                                     set_i8272_status();
                                     commandpos = 0;
                                     readwritephase = false;
@@ -959,11 +970,19 @@ public:
                                 isintpending = true;
                                 break;
                             case 5://Write Data
+                                Drive[commandcode[1] & 3].delaccess = false;
                                 get_i8272_param();
                                 i8272astatus &= ~(1 << (commandcode[1] & 3));
                                 i8272astatus = 0x10 | 0x20 | 0x80;
                                 Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
-                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                if (Diskstat[commandcode[1] & 3].fddphyaccess(Drive[latestdisk].diskpos, prm_1, Drive[latestdisk].recorda, Drive[commandcode[1] & 3].cylinder, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 3) & 1) {
+                                    Drive[commandcode[1] & 3].delaccess = true;
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else if (Diskstat[commandcode[1] & 3].diskinserted == false) {
                                     set_i8272_status();
                                     commandpos = 0;
                                     readwritephase = false;
@@ -975,11 +994,19 @@ public:
                                 }
                                 break;
                             case 6://Read Data
+                                Drive[commandcode[1] & 3].delaccess = false;
                                 get_i8272_param();
                                 i8272astatus &= ~(1 << (commandcode[1] & 3));
                                 i8272astatus = 0x10 | 0x20 | 0x40 | 0x80;
                                 Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
-                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                if (Diskstat[commandcode[1] & 3].fddphyaccess(Drive[latestdisk].diskpos, prm_1, Drive[latestdisk].recorda, Drive[commandcode[1] & 3].cylinder, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 3) & 1) {
+                                    Drive[commandcode[1] & 3].delaccess = true;
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else if (Diskstat[commandcode[1] & 3].diskinserted == false) {
                                     set_i8272_status();
                                     commandpos = 0;
                                     readwritephase = false;
@@ -1019,6 +1046,7 @@ public:
                                 }
                                 break;
                             case 9://Write Deleted Data
+                                Drive[commandcode[1] & 3].delaccess = false;
                                 get_i8272_param();
                                 i8272astatus &= ~(1 << (commandcode[1] & 3));
                                 i8272astatus = 0x10 | 0x20 | 0x80;
@@ -1035,6 +1063,7 @@ public:
                                 }
                                 break;
                             case 12://Read Deleted Data
+                                Drive[commandcode[1] & 3].delaccess = false;
                                 get_i8272_param();
                                 i8272astatus &= ~(1 << (commandcode[1] & 3));
                                 i8272astatus = 0x10 | 0x20 | 0x40 | 0x80;
@@ -1051,6 +1080,7 @@ public:
                                 }
                                 break;
                             case 13://Format Track
+                                Drive[commandcode[1] & 3].delaccess = false;
                                 Drive[commandcode[1] & 3].headsel = ((commandcode[1] & 4) ? true : false);
                                 Drive[commandcode[1] & 3].numofwr = commandcode[2];
                                 Drive[commandcode[1] & 3].endoftrack = commandcode[3];
@@ -1078,10 +1108,18 @@ public:
                                 i8272astatus &= ~(1 << (latestdisk));
                                 break;
                             case 17://Scan Equal
+                                Drive[commandcode[1] & 3].delaccess = false;
                                 get_i8272_param();
                                 i8272astatus = 0x10 | 0x20 | 0x40 | 0x80;
                                 Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
-                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                if (Diskstat[commandcode[1] & 3].fddphyaccess(Drive[latestdisk].diskpos, prm_1, Drive[latestdisk].recorda, Drive[commandcode[1] & 3].cylinder, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 3) & 1) {
+                                    Drive[commandcode[1] & 3].delaccess = true;
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else if (Diskstat[commandcode[1] & 3].diskinserted == false) {
                                     set_i8272_status();
                                     commandpos = 0;
                                     readwritephase = false;
@@ -1093,10 +1131,18 @@ public:
                                 }
                                 break;
                             case 25://Scan Low or Equal
+                                Drive[commandcode[1] & 3].delaccess = false;
                                 get_i8272_param();
                                 i8272astatus = 0x10 | 0x20 | 0x40 | 0x80;
                                 Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
-                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                if (Diskstat[commandcode[1] & 3].fddphyaccess(Drive[latestdisk].diskpos, prm_1, Drive[latestdisk].recorda, Drive[commandcode[1] & 3].cylinder, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 3) & 1) {
+                                    Drive[commandcode[1] & 3].delaccess = true;
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else if (Diskstat[commandcode[1] & 3].diskinserted == false) {
                                     set_i8272_status();
                                     commandpos = 0;
                                     readwritephase = false;
@@ -1108,10 +1154,18 @@ public:
                                 }
                                 break;
                             case 29://Scan High or Equal
+                                Drive[commandcode[1] & 3].delaccess = false;
                                 get_i8272_param();
                                 i8272astatus = 0x10 | 0x20 | 0x40 | 0x80;
                                 Drive[commandcode[1] & 3].headsel = (Drive[commandcode[1] & 3].heada ? true : false);
-                                if (Diskstat[commandcode[1] & 3].diskinserted == false) {
+                                if (Diskstat[commandcode[1] & 3].fddphyaccess(Drive[latestdisk].diskpos, prm_1, Drive[latestdisk].recorda, Drive[commandcode[1] & 3].cylinder, (Drive[latestdisk & 3].headsel ? 0x400 : 0) | (latestdisk << 8) | 3) & 1) {
+                                    Drive[commandcode[1] & 3].delaccess = true;
+                                    set_i8272_status();
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                                else if (Diskstat[commandcode[1] & 3].diskinserted == false) {
                                     set_i8272_status();
                                     commandpos = 0;
                                     readwritephase = false;
@@ -1303,7 +1357,7 @@ int fddrivebus(int prm_0, int prm_1, int prm_2, int prm_3, int prm_4) {
         fread(&readbuf4fddrivebus, 256, 1, fdd[(prm_4 >> 8) & 3].datafile);
     }
     if (fdd[(prm_4 >> 8) & 3].sectortmpl == -1) { return 0xff; }
-    switch (prm_4 & 1) {
+    switch (prm_4 & 3) {
     case 0:
         fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[fdd[(prm_4 >> 8) & 3].sectortmpl2] + (fdd[(prm_4 >> 8) & 3].sectortmpl * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)) + 0x10 + prm_0, SEEK_SET);
         fputc(prm_1, fdd[(prm_4 >> 8) & 3].datafile);
@@ -1312,6 +1366,10 @@ int fddrivebus(int prm_0, int prm_1, int prm_2, int prm_3, int prm_4) {
     case 1:
         //fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[fdd[(prm_4 >> 8) & 3].sectortmpl2] + (fdd[(prm_4 >> 8) & 3].sectortmpl * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)) + 0x10 + prm_0, SEEK_SET);
         return readbuf4fddrivebus[prm_0 & 0xFF];
+        break;
+    case 3:
+        if (fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.isdeleted != 0) { return 0xff; }
+        else { return 0; }
         break;
     }
     return 0xff;
