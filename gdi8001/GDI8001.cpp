@@ -360,6 +360,8 @@ bool crtcreverted = false;
 
 bool is8mhz = false;
 
+bool ispc8801mk2srormore = false;
+
 uint8 crtcatsc = 0;
 
 UINT8 arememorybankenabled = 0;
@@ -1475,8 +1477,8 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
     case 0:
         if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && gvramenabled >= 1 && ispc8801 == true) { gvram[gvramenabled - 1][prm_0 & 0x3FFF] = prm_1 & 0xFF; return 0; }
         if (((prm_0 & 0xFFFF) >= 0xC000 && (prm_0 & 0xFFFF) < 0x10000) && (galuop & 0x80) && ispc8801 == true) { switch (galuop & 0x30) { case 0x00: for (int cnt = 0; cnt < 3; cnt++) { switch ((galuctrl >> cnt) & 0x11) { case 0x00: gvram[cnt][prm_0 & 0x3FFF] &= ~(prm_1 & 0xFF); break; case 0x01: gvram[cnt][prm_0 & 0x3FFF] |= (prm_1 & 0xFF); break; case 0x10: gvram[cnt][prm_0 & 0x3FFF] |= (prm_1 & 0xFF); break; } } break; case 0x10: gvram[0][prm_0 & 0x3FFF] = alutmp.c[0]; gvram[1][prm_0 & 0x3FFF] = alutmp.c[1]; gvram[2][prm_0 & 0x3FFF] = alutmp.c[2]; break; case 0x20: gvram[0][prm_0 & 0x3FFF] = alutmp.c[1]; break; case 0x30: gvram[1][prm_0 & 0x3FFF] = alutmp.c[0]; break; } return 0; }
-        if ((prm_0 & 0xFFFF) >= 0xF000 && fastesttvramenabled == true && ispc8801 == true) { fastestvram[prm_0 & 0xFFF] = prm_1 & 0xFF; return 0; }
-        if ((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0x8400 && (rommode == false || biosromenabled == false) && ispc8801 == true && gvramenabled == 0) { if (fastesttvramenabled == true && (((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) >= 0xF000) { fastestvram[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) - 0xF000] = prm_1 & 0xFF; } else { memory[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF)] = prm_1 & 0xFF; } return 0; }
+        if ((prm_0 & 0xFFFF) >= 0xF000 && fastesttvramenabled == true && ispc8801 == true) { fastestvram[prm_0 & 0xFFF] = prm_1 & 0xFF; ispc8801mk2srormore=true; return 0; }
+        if ((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0x8400 && (rommode == false || biosromenabled == false) && ispc8801 == true && gvramenabled == 0) { if (fastesttvramenabled == true && (((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) >= 0xF000) { fastestvram[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF) - 0xF000] = prm_1 & 0xFF; ispc8801mk2srormore=true; } else { memory[(((prm_0 & 0x3ff) + (textwindoffsetadru8 << 8)) & 0xFFFF)] = prm_1 & 0xFF; } return 0; }
         if (((prm_0 & 0xFFFF) >= 0x8000 && (prm_0 & 0xFFFF) < 0xC000) && gvramenabled >= 1 && ispc8801 == false) { gvram[gvramenabled - 1][prm_0 & 0x3FFF] = prm_1 & 0xFF; return 0; }
         if ((arememorybankenabled & 0xF0) && biosromenabled == false && ((prm_0 & 0xFFFF) < 0x8000)) { if (arememorybankenabled & 0x10) { bankedmemory[0][prm_0 & 0x7FFF] = prm_1 & 0xFF; } if (arememorybankenabled & 0x20) { bankedmemory[1][prm_0 & 0x7FFF] = prm_1 & 0xFF; } if (arememorybankenabled & 0x40) { bankedmemory[2][prm_0 & 0x7FFF] = prm_1 & 0xFF; } if (arememorybankenabled & 0x80) { bankedmemory[3][prm_0 & 0x7FFF] = prm_1 & 0xFF; } return 0; }
         memory[prm_0 & 0xFFFF] = prm_1 & 0xFF;
@@ -2042,12 +2044,12 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
 int crtcmemaccess(int prm_0, int prm_1, int prm_2) {
     switch (prm_2) {
     case 0:
-        if ((prm_0 & 0xFFFF) >= 0xF000 && (bsmode & 0x40) && ispc8801 == true) { fastestvram[prm_0 & 0xFFF] = prm_1 & 0xFF; return fastestvram[prm_0 & 0xFFF]; }
+        if ((prm_0 & 0xFFFF) >= 0xF000 && ispc8801mk2srormore == true && ispc8801 == true) { fastestvram[prm_0 & 0xFFF] = prm_1 & 0xFF; return fastestvram[prm_0 & 0xFFF]; }
         memory[prm_0 & 0xFFFF] = prm_1 & 0xFF;
         return 0;
         break;
     case 1:
-        if ((prm_0 & 0xFFFF) >= 0xF000 && (bsmode & 0x40) && ispc8801 == true) { return fastestvram[prm_0 & 0xFFF]; }
+        if ((prm_0 & 0xFFFF) >= 0xF000 && ispc8801mk2srormore == true && ispc8801 == true) { return fastestvram[prm_0 & 0xFFF]; }
         return memory[prm_0 & 0xFFFF];
         break;
     }
