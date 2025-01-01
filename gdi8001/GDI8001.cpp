@@ -1637,6 +1637,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             break;
         case 0x35:
             galuop = prm_1 & 0xb7;
+            if (galuop & 0x80) { gvramenabled = 0; }
             alucomp.l = ((galuop & 1) ? 0x000000ff : 0) | ((galuop & 2) ? 0x0000ff00 : 0) | ((galuop & 4) ? 0x00ff0000 : 0);
             break;
         case 0x40:
