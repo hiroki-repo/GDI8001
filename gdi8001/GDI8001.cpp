@@ -464,6 +464,7 @@ ALUFETCHBUF alucomp;
 
 UINT8 fddcmemory[16384];
 UINT8 fddcrom[2048];
+bool isloadedfddcfirmware = false;
 
 class i8255 {
 private:
@@ -2161,393 +2162,398 @@ void RunZ80Infinity(LPVOID* arg4rz80) { SYSTEMTIME st_st; SYSTEMTIME st_goal; in
 void BeepService(LPVOID* arg4bs) { while (true) { if (beepenabled) { /*Beep(2400, 100);*/ beep2400play(); } else { beep2400stop(); } /*if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); }*/ } }
 void PC8012Service(LPVOID* arg4bs) { 
     while (FDDCZ80Threadid == 0) { Sleep(0); }
-    SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { clockcountpc8012 = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcountpc8012 < 4000000) { clockcountinternal = 0; GetSystemTime(&st_st); UINT32 Z80Corepfclock = 4000000 / 60; if (fddconnected == true) { while (true) { clockcountinternal += (GN8012.Execute(1) + 1); if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); } if (clockcountinternal >= Z80Corepfclock) { break; } } } clockcountpc8012 += clockcountinternal; GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < 16) { Sleep(16 - ststgoal16); } } }
-    UINT8 amountofsec = 0;
-    UINT8 driveid = 0;
-    UINT8 track = 0;
-    UINT8 sector = 0;
+    if (isloadedfddcfirmware == true) {
+        SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { clockcountpc8012 = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcountpc8012 < 4000000) { clockcountinternal = 0; GetSystemTime(&st_st); UINT32 Z80Corepfclock = 4000000 / 60; if (fddconnected == true) { while (true) { clockcountinternal += (GN8012.Execute(1) + 1); if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); } if (clockcountinternal >= Z80Corepfclock) { break; } } } clockcountpc8012 += clockcountinternal; GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < 16) { Sleep(16 - ststgoal16); } } }
+    }
+    else {
+        UINT8 amountofsec = 0;
+        UINT8 driveid = 0;
+        UINT8 track = 0;
+        UINT8 sector = 0;
 
-    UINT8 driveid2 = 0;
-    UINT8 track2 = 0;
-    UINT8 sector2 = 0;
+        UINT8 driveid2 = 0;
+        UINT8 track2 = 0;
+        UINT8 sector2 = 0;
 
-    UINT8 drivemode = 0x0F;
-    UINT16 transaddr = 0;
-    UINT16 transsize = 0;
-    UINT8 fddcommand = 0;
-    UINT8 fddcommandold = 0;
-    UINT16 recvsendtmp16;
-    RegSet regtmp4du;
-    bool readbufexist = false;
-    bool iserroroccruuedondu = false;
-    UINT16 transaddr2 = 0;
-    UINT8 regid4rwreg4du = 0;
-    while (true) {
-        if (fddconnected == true) {
-            fddcommandold = fddcommand;
-            fddcommand = recvfdcmd28001c();
-            //CreateThread(0, 0, (LPTHREAD_START_ROUTINE)dialogtocheck, ((LPVOID)fddcommand), 0, 0);
-            switch (fddcommand) {
-            case 0x00:
-                readbufexist = false;
-                iserroroccruuedondu = false;
-                fddcmemory[0x3f22] = 0xc9;
-                fddcmemory[0x3f43] = 0;
-                fddcmemory[0x3f44] = 0;
-                GN8012.GetRegSet(&regtmp4du);
-                regtmp4du.sp = 0x8000 - 2;
-                fddcmemory[0x3ffe] = 0x0c;
-                fddcmemory[0x3fff] = 0x00;
-                GN8012.SetRegSet(&regtmp4du);
-                break;
-            case 0x01:
-                amountofsec = recvfdcmd28001();
-                driveid = recvfdcmd28001();
-                track = recvfdcmd28001();
-                sector = recvfdcmd28001() - 1;
-                for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
-                    //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
-                    fddcmemory[cnt] = recvfdcmd28001();
-                }
-                if (GN8012_i8272.Diskstat[driveid].isprotected == true) {
-                    iserroroccruuedondu = true;
-                }
-                else {
-                    iserroroccruuedondu = false;
-                    for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
-                        fddrivebus(cnt % 256, fddcmemory[cnt], (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 0);
-                    }
-                }
-                break;
-            case 0x02:
-                amountofsec = recvfdcmd28001();
-                driveid = recvfdcmd28001();
-                track = recvfdcmd28001();
-                sector = recvfdcmd28001() - 1;
-                if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
-                    readbufexist = true;
-                    iserroroccruuedondu = false;
-                    for (int cnt = 0; cnt < amountofsec; cnt++) {
-                        fddrivebus(0, 0, (cnt)+sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 1);
-                        memcpy(&fddcmemory[(cnt * 256) + 0x1000], readbuf4fddrivebus, 256);
-                    }
-                }
-                else {
+        UINT8 drivemode = 0x0F;
+        UINT16 transaddr = 0;
+        UINT16 transsize = 0;
+        UINT8 fddcommand = 0;
+        UINT8 fddcommandold = 0;
+        UINT16 recvsendtmp16;
+        RegSet regtmp4du;
+        bool readbufexist = false;
+        bool iserroroccruuedondu = false;
+        UINT16 transaddr2 = 0;
+        UINT8 regid4rwreg4du = 0;
+        while (true) {
+            if (fddconnected == true) {
+                fddcommandold = fddcommand;
+                fddcommand = recvfdcmd28001c();
+                //CreateThread(0, 0, (LPTHREAD_START_ROUTINE)dialogtocheck, ((LPVOID)fddcommand), 0, 0);
+                switch (fddcommand) {
+                case 0x00:
                     readbufexist = false;
-                    iserroroccruuedondu = true;
-                }
-                break;
-            case 0x03:
-                if (readbufexist == false) {
-                    while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; } }
-                }
-                else {
+                    iserroroccruuedondu = false;
+                    fddcmemory[0x3f22] = 0xc9;
+                    fddcmemory[0x3f43] = 0;
+                    fddcmemory[0x3f44] = 0;
+                    GN8012.GetRegSet(&regtmp4du);
+                    regtmp4du.sp = 0x8000 - 2;
+                    fddcmemory[0x3ffe] = 0x0c;
+                    fddcmemory[0x3fff] = 0x00;
+                    GN8012.SetRegSet(&regtmp4du);
+                    break;
+                case 0x01:
+                    amountofsec = recvfdcmd28001();
+                    driveid = recvfdcmd28001();
+                    track = recvfdcmd28001();
+                    sector = recvfdcmd28001();
                     for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
                         //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
-                        sendfdcmd28001(fddcmemory[cnt + 0x1000]);
+                        fddcmemory[cnt] = recvfdcmd28001();
                     }
-                    readbufexist = false;
-                }
-                break;
-            case 0x04:
-                amountofsec = recvfdcmd28001();
-                driveid = recvfdcmd28001();
-                track = recvfdcmd28001();
-                sector = recvfdcmd28001() - 1;
-                driveid2 = recvfdcmd28001();
-                track2 = recvfdcmd28001();
-                sector2 = recvfdcmd28001() - 1;
-                if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
-                    if (GN8012_i8272.Diskstat[driveid2].isprotected == true) {
+                    if (GN8012_i8272.Diskstat[driveid].isprotected == true) {
                         iserroroccruuedondu = true;
                     }
                     else {
                         iserroroccruuedondu = false;
                         for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
-                            fddrivebus(cnt % 256, fddrivebus(cnt % 256, 0, (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 1), (cnt / 256) + sector2, ((drivemode & (1 << driveid2)) ? (track2 / 2) : track2), ((drivemode & (1 << driveid)) ? ((track2 % 2) ? 0x400 : 0) : 0) | ((driveid2 & 3) << 8) | 0);
+                            fddrivebus(cnt % 256, fddcmemory[cnt], (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 0);
+                        }
+                    }
+                    break;
+                case 0x02:
+                    amountofsec = recvfdcmd28001();
+                    driveid = recvfdcmd28001();
+                    track = recvfdcmd28001();
+                    sector = recvfdcmd28001();
+                    if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
+                        readbufexist = true;
+                        iserroroccruuedondu = false;
+                        for (int cnt = 0; cnt < amountofsec; cnt++) {
+                            fddrivebus(0, 0, (cnt)+sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 1);
+                            memcpy(&fddcmemory[(cnt * 256) + 0x1000], readbuf4fddrivebus, 256);
+                        }
+                    }
+                    else {
+                        readbufexist = false;
+                        iserroroccruuedondu = true;
+                    }
+                    break;
+                case 0x03:
+                    if (readbufexist == false) {
+                        while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; } }
+                    }
+                    else {
+                        for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
+                            //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
+                            sendfdcmd28001(fddcmemory[cnt + 0x1000]);
                         }
                         readbufexist = false;
                     }
-                }
-                else {
-                    iserroroccruuedondu = true;
-                }
-                break;
-            case 0x05:
-                driveid = recvfdcmd28001();
-                if (GN8012_i8272.Diskstat[driveid2].isprotected == true) {
-                    iserroroccruuedondu = true;
-                }
-                else {
-                    iserroroccruuedondu = false;
-                    for (int cnt = 0; cnt < (0x10 * 80 * 256); cnt++) {
-                        fddrivebus(cnt % 256, 0x00, (cnt / 256) % 0x10, ((drivemode & (1 << driveid)) ? (((cnt / 256) / 0x10) / 2) : ((cnt / 256) / 0x10)), ((drivemode & (1 << driveid)) ? ((((cnt / 256) / 0x10) % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 0);
-                    }
-                }
-                break;
-            case 0x06:
-                sendfdcmd28001(((readbufexist ? 0x40 : 0) | (iserroroccruuedondu ? 0x01 : 0)));
-                break;
-            case 0x07:
-                sendfdcmd28001(0x0F | (GN8012_i8272.Diskstat[0].diskinserted ? 0x10 : 0) | (GN8012_i8272.Diskstat[1].diskinserted ? 0x20 : 0) | (GN8012_i8272.Diskstat[2].diskinserted ? 0x40 : 0) | (GN8012_i8272.Diskstat[3].diskinserted ? 0x80 : 0));
-                break;
-            case 0x08:
-                sendfdcmd28001(0x80);
-                break;
-            case 0x09:
-                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                for (int cnt = 0; cnt < transsize; cnt++) {
-                    sendfdcmd28001(fddcz80memaccess(transaddr + cnt, 0, 1));
-                }
-                break;
-            case 0x0A:
-                fddcz80memaccess(0x00F7, recvfdcmd28001(), 2);
-                break;
-            case 0x0B:
-                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                for (int cnt = 0; cnt < transsize; cnt++) {
-                    sendfdcmd28001(fddcz80memaccess(transaddr + cnt, 0, 1));
-                }
-                break;
-            case 0x0C:
-                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                for (int cnt = 0; cnt < transsize; cnt++) {
-                    fddcz80memaccess(transaddr + cnt, recvfdcmd28001(), 0);
-                }
-                break;
-            case 0x0D:
-                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                GN8012.GetRegSet(&regtmp4du);
-                regtmp4du.pc = transaddr;
-                GN8012.SetRegSet(&regtmp4du);
-                while (regtmp4du.pc != 0x000C) {
-                    GN8012.Execute(1);
-                    GN8012.GetRegSet(&regtmp4du);
-                }
-                regtmp4du.sp = 0x8000 - 2;
-                fddcmemory[0x3ffe] = 0x0c;
-                fddcmemory[0x3fff] = 0x00;
-                GN8012.SetRegSet(&regtmp4du);
-                break;
-            case 0x0E:
-                amountofsec = recvfdcmd28001();
-                driveid = recvfdcmd28001();
-                track = recvfdcmd28001();
-                sector = recvfdcmd28001() - 1;
-                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
-                    iserroroccruuedondu = false;
-                    for (int cnt = 0; cnt < amountofsec * 256; cnt++) {
-                        fddcz80memaccess(transaddr + cnt, fddrivebus(cnt % 256, 0, (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 1), 0);
-                    }
-                }
-                else {
-                    iserroroccruuedondu = true;
-                }
-                break;
-            case 0x0F:
-                amountofsec = recvfdcmd28001();
-                driveid = recvfdcmd28001();
-                track = recvfdcmd28001();
-                sector = recvfdcmd28001() - 1;
-                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
-                    if (GN8012_i8272.Diskstat[driveid].isprotected == false) {
-                        iserroroccruuedondu = false;
-                        for (int cnt = 0; cnt < amountofsec * 256; cnt++) {
-                            fddrivebus(cnt % 256, fddcz80memaccess(transaddr + cnt, 0, 1), (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 0);
+                    break;
+                case 0x04:
+                    amountofsec = recvfdcmd28001();
+                    driveid = recvfdcmd28001();
+                    track = recvfdcmd28001();
+                    sector = recvfdcmd28001();
+                    driveid2 = recvfdcmd28001();
+                    track2 = recvfdcmd28001();
+                    sector2 = recvfdcmd28001();
+                    if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
+                        if (GN8012_i8272.Diskstat[driveid2].isprotected == true) {
+                            iserroroccruuedondu = true;
+                        }
+                        else {
+                            iserroroccruuedondu = false;
+                            for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
+                                fddrivebus(cnt % 256, fddrivebus(cnt % 256, 0, (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 1), (cnt / 256) + sector2, ((drivemode & (1 << driveid2)) ? (track2 / 2) : track2), ((drivemode & (1 << driveid)) ? ((track2 % 2) ? 0x400 : 0) : 0) | ((driveid2 & 3) << 8) | 0);
+                            }
+                            readbufexist = false;
                         }
                     }
                     else {
                         iserroroccruuedondu = true;
                     }
-                }
-                else {
-                    iserroroccruuedondu = true;
-                }
-                break;
-            case 0x11:
-                amountofsec = recvfdcmd28001();
-                driveid = recvfdcmd28001();
-                track = recvfdcmd28001();
-                sector = recvfdcmd28001() - 1;
-                for (int cnt = 0; cnt < (amountofsec * 128); cnt++) {
-                    //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
-                    recvsendtmp16 = recvfdcmd28001w();
-                    fddcmemory[(cnt * 2) + 0] = (recvsendtmp16 >> (8 * 0)) & 0xFF;
-                    fddcmemory[(cnt * 2) + 1] = (recvsendtmp16 >> (8 * 1)) & 0xFF;
-                }
-                if (GN8012_i8272.Diskstat[driveid].isprotected == true) {
-                    iserroroccruuedondu = true;
-                }
-                else {
-                    iserroroccruuedondu = false;
-                    for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
-                        fddrivebus(cnt % 256, fddcmemory[cnt], (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 0);
+                    break;
+                case 0x05:
+                    driveid = recvfdcmd28001();
+                    if (GN8012_i8272.Diskstat[driveid2].isprotected == true) {
+                        iserroroccruuedondu = true;
                     }
-                }
-                break;
-            case 0x12:
-                if (readbufexist == false) {
-                    while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; } }
-                }
-                else {
+                    else {
+                        iserroroccruuedondu = false;
+                        for (int cnt = 0; cnt < (0x10 * 80 * 256); cnt++) {
+                            fddrivebus(cnt % 256, 0x00, (cnt / 256) % 0x10, ((drivemode & (1 << driveid)) ? (((cnt / 256) / 0x10) / 2) : ((cnt / 256) / 0x10)), ((drivemode & (1 << driveid)) ? ((((cnt / 256) / 0x10) % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 0);
+                        }
+                    }
+                    break;
+                case 0x06:
+                    sendfdcmd28001(((readbufexist ? 0x40 : 0) | (iserroroccruuedondu ? 0x01 : 0)));
+                    break;
+                case 0x07:
+                    sendfdcmd28001(0x0F | (GN8012_i8272.Diskstat[0].diskinserted ? 0x10 : 0) | (GN8012_i8272.Diskstat[1].diskinserted ? 0x20 : 0) | (GN8012_i8272.Diskstat[2].diskinserted ? 0x40 : 0) | (GN8012_i8272.Diskstat[3].diskinserted ? 0x80 : 0));
+                    break;
+                case 0x08:
+                    sendfdcmd28001(0x80);
+                    break;
+                case 0x09:
+                    transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    for (int cnt = 0; cnt < transsize; cnt++) {
+                        sendfdcmd28001(fddcz80memaccess(transaddr + cnt, 0, 1));
+                    }
+                    break;
+                case 0x0A:
+                    fddcz80memaccess(0x00F7, recvfdcmd28001(), 2);
+                    break;
+                case 0x0B:
+                    transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    for (int cnt = 0; cnt < transsize; cnt++) {
+                        sendfdcmd28001(fddcz80memaccess(transaddr + cnt, 0, 1));
+                    }
+                    break;
+                case 0x0C:
+                    transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    for (int cnt = 0; cnt < transsize; cnt++) {
+                        fddcz80memaccess(transaddr + cnt, recvfdcmd28001(), 0);
+                    }
+                    break;
+                case 0x0D:
+                    transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    GN8012.GetRegSet(&regtmp4du);
+                    regtmp4du.pc = transaddr;
+                    GN8012.SetRegSet(&regtmp4du);
+                    while (regtmp4du.pc != 0x000C) {
+                        GN8012.Execute(1);
+                        if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); }
+                        GN8012.GetRegSet(&regtmp4du);
+                    }
+                    regtmp4du.sp = 0x8000 - 2;
+                    fddcmemory[0x3ffe] = 0x0c;
+                    fddcmemory[0x3fff] = 0x00;
+                    GN8012.SetRegSet(&regtmp4du);
+                    break;
+                case 0x0E:
+                    amountofsec = recvfdcmd28001();
+                    driveid = recvfdcmd28001();
+                    track = recvfdcmd28001();
+                    sector = recvfdcmd28001();
+                    transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
+                        iserroroccruuedondu = false;
+                        for (int cnt = 0; cnt < amountofsec * 256; cnt++) {
+                            fddcz80memaccess(transaddr + cnt, fddrivebus(cnt % 256, 0, (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 1), 0);
+                        }
+                    }
+                    else {
+                        iserroroccruuedondu = true;
+                    }
+                    break;
+                case 0x0F:
+                    amountofsec = recvfdcmd28001();
+                    driveid = recvfdcmd28001();
+                    track = recvfdcmd28001();
+                    sector = recvfdcmd28001();
+                    transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
+                        if (GN8012_i8272.Diskstat[driveid].isprotected == false) {
+                            iserroroccruuedondu = false;
+                            for (int cnt = 0; cnt < amountofsec * 256; cnt++) {
+                                fddrivebus(cnt % 256, fddcz80memaccess(transaddr + cnt, 0, 1), (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 0);
+                            }
+                        }
+                        else {
+                            iserroroccruuedondu = true;
+                        }
+                    }
+                    else {
+                        iserroroccruuedondu = true;
+                    }
+                    break;
+                case 0x11:
+                    amountofsec = recvfdcmd28001();
+                    driveid = recvfdcmd28001();
+                    track = recvfdcmd28001();
+                    sector = recvfdcmd28001();
                     for (int cnt = 0; cnt < (amountofsec * 128); cnt++) {
                         //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
-                        sendfdcmd28001w((fddcmemory[((cnt * 2) + 0) + 0x1000] & 0xFF) | ((fddcmemory[((cnt * 2) + 1) + 0x1000] & 0xFF) << 8));
+                        recvsendtmp16 = recvfdcmd28001w();
+                        fddcmemory[(cnt * 2) + 0] = (recvsendtmp16 >> (8 * 0)) & 0xFF;
+                        fddcmemory[(cnt * 2) + 1] = (recvsendtmp16 >> (8 * 1)) & 0xFF;
                     }
-                    readbufexist = false;
+                    if (GN8012_i8272.Diskstat[driveid].isprotected == true) {
+                        iserroroccruuedondu = true;
+                    }
+                    else {
+                        iserroroccruuedondu = false;
+                        for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
+                            fddrivebus(cnt % 256, fddcmemory[cnt], (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 0);
+                        }
+                    }
+                    break;
+                case 0x12:
+                    if (readbufexist == false) {
+                        while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; } }
+                    }
+                    else {
+                        for (int cnt = 0; cnt < (amountofsec * 128); cnt++) {
+                            //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
+                            sendfdcmd28001w((fddcmemory[((cnt * 2) + 0) + 0x1000] & 0xFF) | ((fddcmemory[((cnt * 2) + 1) + 0x1000] & 0xFF) << 8));
+                        }
+                        readbufexist = false;
+                    }
+                    break;
+                case 0x13:
+                    sendfdcmd28001(0);
+                    sendfdcmd28001(0);
+                    sendfdcmd28001(0);
+                    sendfdcmd28001(0);
+                    sendfdcmd28001(track / 2);
+                    sendfdcmd28001(track % 2);
+                    sendfdcmd28001(sector);
+                    sendfdcmd28001(256);
+                    break;
+                case 0x14:
+                    driveid = recvfdcmd28001();
+                    sendfdcmd28001((driveid & 3) | ((track == 0) ? 0x10 : 0) | ((track % 2) ? 0x04 : 0) | (GN8012_i8272.Diskstat[driveid].isprotected ? 0x40 : 0) | ((drivemode & (1 << driveid)) ? 0x08 : 0) | 0x20);
+                    break;
+                case 0x15:
+                    transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    for (int cnt = 0; cnt < (transsize / 2); cnt++) {
+                        //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
+                        sendfdcmd28001w(((fddcz80memaccess(transaddr + ((cnt * 2) + 0), 0, 1) << (8 * 0)) & 0xFF) | ((fddcz80memaccess(transaddr + ((cnt * 2) + 1), 0, 1) << (8 * 1)) & 0xFF00));
+                    }
+                    break;
+                case 0x16:
+                    transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    for (int cnt = 0; cnt < (transsize / 2); cnt++) {
+                        //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
+                        recvsendtmp16 = recvfdcmd28001w();
+                        fddcz80memaccess(transaddr + ((cnt * 2) + 0), ((recvsendtmp16 >> (8 * 0)) & 0xFF), 0);
+                        fddcz80memaccess(transaddr + ((cnt * 2) + 1), ((recvsendtmp16 >> (8 * 1)) & 0xFF), 0);
+                    }
+                    break;
+                case 0x17:
+                    drivemode = recvfdcmd28001();
+                    break;
+                case 0x18:
+                    sendfdcmd28001(drivemode);
+                    break;
+                case 0x1C:
+                    transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    transaddr2 = (fddcmemory[0x3f43] & 0x00FF) | ((fddcmemory[0x3f44] << 8) & 0xFF00);
+                    fddcz80memaccess(transaddr2, fddcmemory[0x3f45], 0);
+                    fddcmemory[0x3f43] = (transaddr >> (8 * 0)) & 0xFF;
+                    fddcmemory[0x3f44] = (transaddr >> (8 * 1)) & 0xFF;
+                    fddcmemory[0x3f45] = fddcz80memaccess(transaddr, 0, 1);
+                    fddcz80memaccess(transaddr, 0xcf, 0);
+                    break;
+                case 0x1D:
+                    regid4rwreg4du = recvfdcmd28001();
+                    transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    GN8012.GetRegSet(&regtmp4du);
+                    switch (regid4rwreg4du) {
+                    case 0x00:
+                        regtmp4du.af = transaddr;
+                        break;
+                    case 0x01:
+                        regtmp4du.bc = transaddr;
+                        break;
+                    case 0x02:
+                        regtmp4du.de = transaddr;
+                        break;
+                    case 0x03:
+                        regtmp4du.hl = transaddr;
+                        break;
+                    case 0x04:
+                        regtmp4du.xaf = transaddr;
+                        break;
+                    case 0x05:
+                        regtmp4du.xbc = transaddr;
+                        break;
+                    case 0x06:
+                        regtmp4du.xde = transaddr;
+                        break;
+                    case 0x07:
+                        regtmp4du.xhl = transaddr;
+                        break;
+                    case 0x08:
+                        regtmp4du.ix = transaddr;
+                        break;
+                    case 0x09:
+                        regtmp4du.iy = transaddr;
+                        break;
+                    case 0x0a:
+                        GN8012.SetIntVec(transaddr);
+                        break;
+                    case 0x0b:
+                        regtmp4du.pc = transaddr;
+                        break;
+                    case 0x0c:
+                        regtmp4du.sp = transaddr;
+                        break;
+                    }
+                    GN8012.SetRegSet(&regtmp4du);
+                    break;
+                case 0x1E:
+                    regid4rwreg4du = recvfdcmd28001();
+                    transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
+                    GN8012.GetRegSet(&regtmp4du);
+                    switch (regid4rwreg4du) {
+                    case 0x00:
+                        transaddr = regtmp4du.af;
+                        break;
+                    case 0x01:
+                        transaddr = regtmp4du.bc;
+                        break;
+                    case 0x02:
+                        transaddr = regtmp4du.de;
+                        break;
+                    case 0x03:
+                        transaddr = regtmp4du.hl;
+                        break;
+                    case 0x04:
+                        transaddr = regtmp4du.xaf;
+                        break;
+                    case 0x05:
+                        transaddr = regtmp4du.xbc;
+                        break;
+                    case 0x06:
+                        transaddr = regtmp4du.xde;
+                        break;
+                    case 0x07:
+                        transaddr = regtmp4du.xhl;
+                        break;
+                    case 0x08:
+                        transaddr = regtmp4du.ix;
+                        break;
+                    case 0x09:
+                        transaddr = regtmp4du.iy;
+                        break;
+                    case 0x0a:
+                        transaddr = 0;
+                        break;
+                    case 0x0b:
+                        transaddr = regtmp4du.pc;
+                        break;
+                    case 0x0c:
+                        transaddr = regtmp4du.sp;
+                        break;
+                    }
+                    sendfdcmd28001((transaddr >> 8) & 0xFF);
+                    sendfdcmd28001((transaddr >> 0) & 0xFF);
+                    break;
                 }
-                break;
-            case 0x13:
-                sendfdcmd28001(0);
-                sendfdcmd28001(0);
-                sendfdcmd28001(0);
-                sendfdcmd28001(0);
-                sendfdcmd28001(track / 2);
-                sendfdcmd28001(track % 2);
-                sendfdcmd28001(sector);
-                sendfdcmd28001(256);
-                break;
-            case 0x14:
-                driveid = recvfdcmd28001();
-                sendfdcmd28001((driveid & 3) | ((track == 0) ? 0x10 : 0) | ((track % 2) ? 0x04 : 0) | (GN8012_i8272.Diskstat[driveid].isprotected ? 0x40 : 0) | ((drivemode & (1 << driveid)) ? 0x08 : 0) | 0x20);
-                break;
-            case 0x15:
-                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                for (int cnt = 0; cnt < (transsize / 2); cnt++) {
-                    //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
-                    sendfdcmd28001w(((fddcz80memaccess(transaddr + ((cnt * 2) + 0), 0, 1) << (8 * 0)) & 0xFF) | ((fddcz80memaccess(transaddr + ((cnt * 2) + 1), 0, 1) << (8 * 1)) & 0xFF00));
-                }
-                break;
-            case 0x16:
-                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                transsize = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                for (int cnt = 0; cnt < (transsize / 2); cnt++) {
-                    //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
-                    recvsendtmp16 = recvfdcmd28001w();
-                    fddcz80memaccess(transaddr + ((cnt * 2) + 0), ((recvsendtmp16 >> (8 * 0)) & 0xFF), 0);
-                    fddcz80memaccess(transaddr + ((cnt * 2) + 1), ((recvsendtmp16 >> (8 * 1)) & 0xFF), 0);
-                }
-                break;
-            case 0x17:
-                drivemode = recvfdcmd28001();
-                break;
-            case 0x18:
-                sendfdcmd28001(drivemode);
-                break;
-            case 0x1C:
-                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                transaddr2 = (fddcmemory[0x3f43] & 0x00FF) | ((fddcmemory[0x3f44] << 8) & 0xFF00);
-                fddcz80memaccess(transaddr2, fddcmemory[0x3f45], 0);
-                fddcmemory[0x3f43] = (transaddr >> (8 * 0)) & 0xFF;
-                fddcmemory[0x3f44] = (transaddr >> (8 * 1)) & 0xFF;
-                fddcmemory[0x3f45] = fddcz80memaccess(transaddr, 0, 1);
-                fddcz80memaccess(transaddr, 0xcf, 0);
-                break;
-            case 0x1D:
-                regid4rwreg4du = recvfdcmd28001();
-                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                GN8012.GetRegSet(&regtmp4du);
-                switch (regid4rwreg4du) {
-                case 0x00:
-                    regtmp4du.af = transaddr;
-                    break;
-                case 0x01:
-                    regtmp4du.bc = transaddr;
-                    break;
-                case 0x02:
-                    regtmp4du.de = transaddr;
-                    break;
-                case 0x03:
-                    regtmp4du.hl = transaddr;
-                    break;
-                case 0x04:
-                    regtmp4du.xaf = transaddr;
-                    break;
-                case 0x05:
-                    regtmp4du.xbc = transaddr;
-                    break;
-                case 0x06:
-                    regtmp4du.xde = transaddr;
-                    break;
-                case 0x07:
-                    regtmp4du.xhl = transaddr;
-                    break;
-                case 0x08:
-                    regtmp4du.ix = transaddr;
-                    break;
-                case 0x09:
-                    regtmp4du.iy = transaddr;
-                    break;
-                case 0x0a:
-                    GN8012.SetIntVec(transaddr);
-                    break;
-                case 0x0b:
-                    regtmp4du.pc = transaddr;
-                    break;
-                case 0x0c:
-                    regtmp4du.sp = transaddr;
-                    break;
-                }
-                GN8012.SetRegSet(&regtmp4du);
-                break;
-            case 0x1E:
-                regid4rwreg4du = recvfdcmd28001();
-                transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                GN8012.GetRegSet(&regtmp4du);
-                switch (regid4rwreg4du) {
-                case 0x00:
-                    transaddr = regtmp4du.af;
-                    break;
-                case 0x01:
-                    transaddr = regtmp4du.bc;
-                    break;
-                case 0x02:
-                    transaddr = regtmp4du.de;
-                    break;
-                case 0x03:
-                    transaddr = regtmp4du.hl;
-                    break;
-                case 0x04:
-                    transaddr = regtmp4du.xaf;
-                    break;
-                case 0x05:
-                    transaddr = regtmp4du.xbc;
-                    break;
-                case 0x06:
-                    transaddr = regtmp4du.xde;
-                    break;
-                case 0x07:
-                    transaddr = regtmp4du.xhl;
-                    break;
-                case 0x08:
-                    transaddr = regtmp4du.ix;
-                    break;
-                case 0x09:
-                    transaddr = regtmp4du.iy;
-                    break;
-                case 0x0a:
-                    transaddr = 0;
-                    break;
-                case 0x0b:
-                    transaddr = regtmp4du.pc;
-                    break;
-                case 0x0c:
-                    transaddr = regtmp4du.sp;
-                    break;
-                }
-                sendfdcmd28001((transaddr >> 8) & 0xFF);
-                sendfdcmd28001((transaddr >> 0) & 0xFF);
-                break;
             }
-        }
-        else {
-            Sleep(16);
+            else {
+                Sleep(16);
+            }
         }
     }
 }
@@ -3377,11 +3383,14 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
         fread(dicrom, 0x80000, 1, biosfile);
         fclose(biosfile);
     }
+    isloadedfddcfirmware = false;
+    fddconnected = true;
     FILE* fddbiosfile = fopen("n80s31.rom", "rb");
     if (fddbiosfile != 0) {
         fread(fddcrom, 0x800, 1, fddbiosfile);
         fclose(fddbiosfile);
         fddconnected = true;
+        isloadedfddcfirmware = true;
     }
 
     FILE* fontfile = fopen("font.rom", "rb");
