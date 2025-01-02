@@ -15,7 +15,7 @@ is a PC-8001 Emulator which rends graphic GDI only!
 
 2, Extract the zip file that downloaded now!
 
-3, Please put firmware files PC-8801 font as "font.rom", 4TH Firmware as "N88_0.rom", PC-8801 N-88 BASIC as "n88basic.rom" and PC-8001 compatible BASIC as "n80basic.rom" to GDI8001-main folder!
+3, Please put firmware files PC-8801 font as "font.rom", 4TH Firmware as "N88_0.rom", PC-8801 N-88 BASIC as "n88basic.rom" and PC-8001 compatible BASIC as "n80basic.rom" to GDI8001-main folder! If you wanted to use low level Floppy disk drive emulation, Please put the PC-80s31 or PC-8801 fdd controller firmware as "n80s31.rom" for the program folder! If you wanted to use the Kanji rom, Please put the 1st level data rom as "kfont1.rom" and 2nd level data rom as "kfont2.rom"!
 
 4, Run "GDI8001.exe"
 
