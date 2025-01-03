@@ -2938,7 +2938,6 @@ uint8 charattributefinal = 0;
 
 void DrawGrp() {
     charattribute = 0;
-    if (charattributefinal & 4) { charattribute = 4; }
     if (ispc8801 == true) {
         for (int cnt = 0; cnt < 8; cnt++) { DeleteObject(hBackGround[cnt + 64]); DeleteObject(hBackGround[cnt + 64 + 128]); DeleteObject(hBackGround[cnt + 72]); DeleteObject(hBackGround[cnt + 72 + 128]); hBackGround[cnt + 64] = CreateSolidBrush(RGB(((palette512_8bt[cnt][0] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][1] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][0] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 72] = CreateSolidBrush(RGB(((palette512_8bt[cnt][2] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][3] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][2] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 64 + 128] = CreateSolidBrush(RGB(0, ((((((palette512_8bt[cnt][0] >> 3) & 7) + ((palette512_8bt[cnt][1] >> 0) & 7) + ((palette512_8bt[cnt][0] >> 0) & 7)) / 3) + 1) * 28) + 3, 0)); hBackGround[cnt + 72 + 128] = CreateSolidBrush(RGB(0, ((((((palette512_8bt[cnt][2] >> 3) & 7) + ((palette512_8bt[cnt][3] >> 0) & 7) + ((palette512_8bt[cnt][2] >> 0) & 7)) / 3) + 1) * 28), 0)); }
         for (int cnt = 0; cnt < 256; cnt++) {
@@ -2959,6 +2958,7 @@ void DrawGrp() {
         for (chkedbb8 = 0; chkedbb8 < (((dmatc[2] & 0x3FFF) >= 0xbb8) ? (((dmatc[2] & 0x3FFF) / 0xbb8) + 1) : 1); chkedbb8++) {
             bool breakdowndgp = false;
             UINT8 charattributetmp4backupforlater = 0;
+            bool isattributerouleschanged = false;
 
             for (int drawbacky = 0; drawbacky < 25; drawbacky++) {
                 for (int drawbackx = 0; drawbackx < 80; drawbackx++) {
@@ -2972,14 +2972,24 @@ void DrawGrp() {
                             }
                         }
                         else {
-                            for (int cnt = 0; cnt < 20; cnt++) {
-                                uint8 charattributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if (attributetmp <= drawbackx && attributetmp > attributeold) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if ((attributetmp3 <= drawbackx && attributetmp3 > attributeold3) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
+                            isattributerouleschanged = false;
+                            uint8 charattributetmp = 0;
+                            for (int cnt = 19; cnt >= 0; cnt--) {
+                                uint8 charattributetmp4a = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1);
+                                if (charattributetmp4a & 0x80) { isattributerouleschanged = true; }
+                                if ((((charattributetmp4a&0x7F) == drawbackx) && isattributerouleschanged == false) || (((charattributetmp4a) > drawbackx) && isattributerouleschanged == true)) {
+                                    charattributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1);
+                                    if (charattributetmp & 8) {
+                                        fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7;
+                                    }
+                                    else {
+                                        charattribute = charattributetmp;
+                                    }
+                                }
                             }
                         }
                         if (semigraphicenabled == true) { charattribute |= 128; }
                         graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute ^ (crtcreverted ? 4 : 0);
-                        if (charattributefinal & 4) { graphiccodes[(80 * drawbacky) + drawbackx][0] ^= 4; }
-                        //graphiccodes[(80 * drawbacky) + drawbackx][0] = charattribute ^ (crtcreverted ? 4 : 0);
                         graphiccodes[(80 * drawbacky) + drawbackx][1] = grpcolors;
                         colorbool[drawbacky] = grpcolors;
                     }
@@ -2990,7 +3000,10 @@ void DrawGrp() {
                     }
                 }
             }
-            charattributefinal = charattribute;
+            if (isattributerouleschanged == true) {
+                charattributefinal = charattribute;
+            }
+            else { charattributefinal = 0; }
             upd3301stat |= 8;
             if (fullgraphicdraw == true) {
 
