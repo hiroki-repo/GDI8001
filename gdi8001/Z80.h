@@ -1,6 +1,6 @@
 // Portable Z80 emulation class
-// Copyright (C) Yasuo Kuwahara 2002-2018
-// version 2.10
+// Copyright (C) Yasuo Kuwahara 2002-2021
+// version 2.20
 
 #ifndef _Z80_H_
 #define _Z80_H_
@@ -97,7 +97,7 @@ struct TraceBuffer {
 struct FlagDecision {
 	uint32_t dm;
 	int32_t b, a;
-	uint16_t pv, cy;
+	uint16_t pv, s;
 };
 
 typedef struct {
@@ -120,7 +120,6 @@ typedef struct {
 class Z80 {
 public:
 	Z80();
-	virtual ~Z80() {}
 	void Reset();
 	int32_t Execute(int32_t = 1);
 	void INT(int data_bus) { intdata = data_bus; intreq = true; }
@@ -143,7 +142,7 @@ public:
 	void DebugEnable();
 
 
-	void GetRegSet(RegSet *reg);
+	void GetRegSet(RegSet* reg);
 	void SetRegSet(RegSet* reg);
 #if BUILTIN_MEMORY
 	void SetMemoryPtr(uint8_t *p) { m = p; }
@@ -174,7 +173,6 @@ private:
 #define store(x, y)	(m[x] = y)
 #else
 	virtual int32_t load(uint16_t adr) = 0;
-	virtual int32_t loadpc(uint16_t adr) = 0;
 	virtual void store(uint16_t adr, uint8_t data) = 0;
 #endif
 #if CLOCK_EMU >= 2
@@ -251,10 +249,8 @@ private:
 	TraceBuffer *tracep;
 	bool trace_enable;
 #endif
-
-	virtual void Halt() {}
-
 #ifdef Z80_DEBUG
+	void Halt();
 	void ill();
 #endif
 };

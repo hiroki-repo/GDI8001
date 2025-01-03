@@ -1,11 +1,8 @@
-﻿// Portable Z80 emulation class
-// Copyright (C) Yasuo Kuwahara 2002-2018
-// version 2.10
+// Portable Z80 emulation class
+// Copyright (C) Yasuo Kuwahara 2002-2021
+// version 2.20
 
 #include "Z80.h"
-
-#include <stdio.h>
-
 
 #ifdef Z80_DEBUG
 #include <stdio.h>
@@ -80,9 +77,9 @@
 #define IMM16		(CLOCK_MEM2(), pc += 2, load(pc - 2) | load(pc - 1) << 8)
 #endif
 #else
-#define IMM8		(loadpc(pc++))
+#define IMM8		(load(pc++))
 #define M1			IMM8
-#define IMM16		(pc += 2, loadpc(pc - 2) | loadpc(pc - 1) << 8)
+#define IMM16		(pc += 2, load(pc - 2) | load(pc - 1) << 8)
 #endif
 
 #define SET2(macro)\
@@ -219,10 +216,10 @@ enum {
 #define fmov(x)			(fp->dm = S8 | Z8 | H0 | PVB | N0, fp->b = Iff2 << LPV, fp->a = (x), fmnt())
 #define fbtr(x)			(fp->dm = H0 | PV | N0, fp->pv = (x), fmnt())
 #define fcp(x, y, z)	(fp->dm = S8 | Z8 | HSUB8 | PV | N1, fp->pv = (x), fp->b = (y), fp->a = (z), fmnt())
-#define fadd(x, y, z)	(fp->dm = S8 | Z8 | HADD8 | VADD8 | N0 | CADD8, fp->b = (x), fp->a = (y), fp->pv = (z), fmnt())
-#define fsub(x, y, z)	(fp->dm = S8 | Z8 | HSUB8 | VSUB8 | N1 | CSUB8, fp->b = (x), fp->a = (y), fp->pv = (z), fmnt())
-#define finc(x, y)		(fp->dm = S8 | Z8 | HADD8 | VADD8 | N0, fp->b = (x), fp->a = (y), fp->pv = 1, fmnt())
-#define fdec(x, y)		(fp->dm = S8 | Z8 | HSUB8 | VSUB8 | N1, fp->b = (x), fp->a = (y), fp->pv = 1, fmnt())
+#define fadd(x, w, y, z)	(fp->dm = S8 | Z8 | HADD8 | VADD8 | N0 | CADD8, fp->b = (x), fp->s = (w), fp->a = (y), fp->pv = (z), fmnt())
+#define fsub(x, w, y, z)	(fp->dm = S8 | Z8 | HSUB8 | VSUB8 | N1 | CSUB8, fp->b = (x), fp->s = (w), fp->a = (y), fp->pv = (z), fmnt())
+#define finc(x, y)		(fp->dm = S8 | Z8 | HADD8 | VADD8 | N0, fp->b = (x), fp->s = 0, fp->a = (y), fp->pv = 1, fmnt())
+#define fdec(x, y)		(fp->dm = S8 | Z8 | HSUB8 | VSUB8 | N1, fp->b = (x), fp->s = 0, fp->a = (y), fp->pv = 1, fmnt())
 #define fand(x)			(fp->dm = S8 | Z8 | H1 | PARITY | N0 | C0, fp->a = (x), fmnt())
 #define fxor(x)			(fp->dm = S8 | Z8 | H0 | PARITY | N0 | C0, fp->a = (x), fmnt())
 #define fadd16(x, y, z)	(fp->dm = HADD16 | N0 | CADD16, fp->b = (x), fp->a = (y), fp->pv = (z), fmnt())
@@ -262,12 +259,6 @@ Z80::Z80() {
 	tracep = tracebuf;
 	trace_enable = true;
 #endif
-
-	DebugEnableFlag = true;
-	DebugWaitFlag = false;
-	DebugInstExecFlag = false;
-	EnableBreakPointFlag = false;
-	BreakPointAddress = 0x0000;
 }
 
 void Z80::Reset() {
@@ -284,7 +275,6 @@ void Z80::Reset() {
 	SetupFlags(0xff);
 	sp = 0xffff;
 	nmireq = intreq = Iff_set = false;
-	verbose = false;
 }
 
 uint16_t Z80::GetHL(void)
@@ -307,7 +297,7 @@ uint8_t Z80::GetA(void)
 
 uint16_t Z80::GetIX(void)
 {
-	return (*(uint16_t *)&r[4 + OFS_IX]);
+	return (*(uint16_t*)&r[4 + OFS_IX]);
 }
 
 void Z80::EnableBreakPoint(uint16_t adr)
@@ -324,7 +314,7 @@ void Z80::DisableBreakPoint()
 
 void Z80::DebugRun()
 {
-	// 一つ実行して再度ブレイクポイントまで実行
+	// ����s���čēx�u���C�N�|�C���g�܂Ŏ��s
 	DebugInstExecFlag = true;
 	DebugWaitFlag = false;
 }
@@ -349,6 +339,7 @@ void Z80::DebugEnable()
 	DebugEnableFlag = true;
 }
 
+
 void Z80::GetRegSet(RegSet* reg)
 {
 	reg->pc = pc;
@@ -358,12 +349,12 @@ void Z80::GetRegSet(RegSet* reg)
 	reg->bc = BC;
 	reg->de = DE;
 	reg->hl = HL;
-	reg->ix = GetIX();
+	reg->ix = *(uint16_t*)&r[4 + OFS_IX];
 	reg->iy = *(uint16_t*)&r[4 + OFS_IY];
 
-	reg->xaf = (a_ << 8 | f_ << 8);
+	reg->xaf = (a_ << 8 | f_ << 0);
 	reg->xbc = (*(uint16_t*)&bcde);
-	reg->xde = (*((uint16_t*)&bcde)+1);
+	reg->xde = (*((uint16_t*)&bcde) + 1);
 	reg->xhl = (HLfix);
 }
 
@@ -376,6 +367,14 @@ void Z80::SetRegSet(RegSet* reg)
 	BC = reg->bc;
 	DE = reg->de;
 	HL = reg->hl;
+	(*(uint16_t*)&r[4 + OFS_IX]) = reg->ix;
+	(*(uint16_t*)&r[4 + OFS_IY]) = reg->iy;
+
+	a_ = (reg->xaf >> 8) & 0xFF;
+	f_ = (reg->xaf >> 0) & 0xFF;
+	(*(uint16_t*)&bcde) = reg->xbc;
+	(*(((uint16_t*)&bcde) + 1)) = reg->xde;
+	(HLfix) = reg->xhl;
 }
 
 int32_t Z80::Execute(int32_t n) {
@@ -388,28 +387,17 @@ int32_t Z80::Execute(int32_t n) {
 	clock = 0;
 #endif
 	do {
-		if (DebugEnableFlag) {
-			// ブレイクポイントであれば待機する
-			if (EnableBreakPointFlag && !DebugInstExecFlag && BreakPointAddress == pc) {
-				DebugWaitFlag = true;
-			}
-			// 待機状態であれば実行しない
-			if (DebugWaitFlag && !DebugInstExecFlag) continue;
-			DebugInstExecFlag = false;
-		}
-		
 #ifdef Z80_TRACE
 		if (!rofs) tracep->pc = pc;
 		tracep->acs1 = tracep->acs2 = 0;
 #endif
-
 		RefReg++;
 		switch (M1) {
 #define RST(i) case 0xc7 + 8 * (i): if (Extender(8 * i)) break; st16(sp -= 2, pc); pc = 8 * i; CLOCK(1); break;
 			SET_8(RST)
 			case 0xfe:
 			tmp = IMM8;
-			fsub(A, A - tmp, 0); // cp n
+			fsub(A, tmp, A - tmp, 0); // cp n
 			break;
 			case 0xf6:
 			fxor(A |= IMM8); // or n
@@ -421,23 +409,25 @@ int32_t Z80::Execute(int32_t n) {
 			fand(A &= IMM8); // and n
 			break;
 			case 0xde: // sbc a,n
-			tmp = IMM8 + (cy = CY);
-			fsub(A, tmp2 = A - tmp, cy);
+			tmp = IMM8;
+			cy = CY;
+			fsub(A, tmp, tmp2 = A - tmp - cy, cy);
 			A = tmp2;
 			break;
 			case 0xd6: // sub n
 			tmp = IMM8;
-			fsub(A, tmp2 = A - tmp, 0);
+			fsub(A, tmp, tmp2 = A - tmp, 0);
 			A = tmp2;
 			break;
 			case 0xce: // adc a,n
-			tmp = IMM8 + (cy = CY);
-			fadd(A, tmp2 = A + tmp, cy);
+			tmp = IMM8;
+			cy = CY;
+			fadd(A, tmp, tmp2 = A + tmp + cy, cy);
 			A = tmp2;
 			break;
 			case 0xc6: // add a,n
 			tmp = IMM8;
-			fadd(A, tmp2 = A + tmp, 0);
+			fadd(A, tmp, tmp2 = A + tmp, 0);
 			A = tmp2;
 			break;
 			case 0xfd:
@@ -479,7 +469,7 @@ int32_t Z80::Execute(int32_t n) {
 				break;
 				case 0x44: case 0x4c: case 0x54: case 0x5c: 
 				case 0x64: case 0x6c: case 0x74: case 0x7c: // neg
-				fsub(0, tmp2 = -A, 0);
+				fsub(0, -A, tmp2 = -A, 0);
 				A = tmp2;
 				break;
 				case 0x4d: // reti
@@ -671,9 +661,6 @@ int32_t Z80::Execute(int32_t n) {
 			case 0xcd: // call nn
 			st16(sp -= 2, pc + 2);
 			tmp2 = IMM16;
-			if (tmp2 < 0x8000) {
-				printf("cd pc:%04x -> %04x\n", tmp2, pc);
-			}
 			pc = tmp2;
 			CLOCK(1);
 			break;
@@ -814,7 +801,6 @@ int32_t Z80::Execute(int32_t n) {
 			case 0xc3: // jp nn
 			tmp2 = IMM16;
 			pc = tmp2;
-			if (verbose) printf("c3 pc:%04x\n", pc);
 			break;
 			// conditional jump
 #define JP_COND(i, cond) case 0xc2 + 8 * (i): tmp2 = IMM16; if (cond) pc = tmp2; break;
@@ -848,14 +834,14 @@ int32_t Z80::Execute(int32_t n) {
 			COND8(RET_COND)
 			case 0xbe: // cp (hl)
 			tmp = ld8(HL);
-			fsub(A, A - tmp, 0);
+			fsub(A, tmp, A - tmp, 0);
 			if (rofs) {
 				pc++;
 				CLOCK(4);
 			}
 			break;
 			// cp reg
-#define CP(i) case 0xb8 + (i): tmp = REG##i; fsub(A, A - tmp, 0); break;
+#define CP(i) case 0xb8 + (i): tmp = REG##i; fsub(A, tmp, A - tmp, 0); break;
 			SET7(CP)
 			// or (hl)
 			case 0xb6:
@@ -892,8 +878,9 @@ int32_t Z80::Execute(int32_t n) {
 			SET7(AND)
 			// sbc (hl)
 			case 0x9e:
-			tmp = ld8(HL) + (cy = CY);
-			fsub(A, tmp2 = A - tmp, cy);
+			tmp = ld8(HL);
+			cy = CY;
+			fsub(A, tmp, tmp2 = A - tmp - cy, cy);
 			A = tmp2;
 			if (rofs) {
 				pc++;
@@ -901,12 +888,12 @@ int32_t Z80::Execute(int32_t n) {
 			}
 			break;
 			// sbc reg
-#define SBC8(i) case 0x98 + (i): tmp = REG##i + (cy = CY); fsub(A, tmp2 = A - tmp, cy); A = tmp2; break;
+#define SBC8(i) case 0x98 + (i): tmp = REG##i; cy = CY; fsub(A, tmp, tmp2 = A - tmp - cy, cy); A = tmp2; break;
 			SET7(SBC8)
 			// sub (hl)
 			case 0x96:
 			tmp = ld8(HL);
-			fsub(A, tmp2 = A - tmp, 0);
+			fsub(A, tmp, tmp2 = A - tmp, 0);
 			A = tmp2;
 			if (rofs) {
 				pc++;
@@ -914,12 +901,13 @@ int32_t Z80::Execute(int32_t n) {
 			}
 			break;
 			// sub reg
-#define SUB(i) case 0x90 + (i): tmp = REG##i; fsub(A, tmp2 = A - tmp, 0); A = tmp2; break;
+#define SUB(i) case 0x90 + (i): tmp = REG##i; fsub(A, tmp, tmp2 = A - tmp, 0); A = tmp2; break;
 			SET7(SUB)
 			// adc (hl)
 			case 0x8e:
-			tmp = ld8(HL) + (cy = CY);
-			fadd(A, tmp2 = A + tmp, cy);
+			tmp = ld8(HL);
+			cy = CY;
+			fadd(A, tmp, tmp2 = A + tmp + cy, cy);
 			A = tmp2;
 			if (rofs) {
 				pc++;
@@ -927,12 +915,12 @@ int32_t Z80::Execute(int32_t n) {
 			}
 			break;
 			// adc reg
-#define ADC8(i) case 0x88 + (i): tmp = REG##i + (cy = CY); fadd(A, tmp2 = A + tmp, cy); A = tmp2; break;
+#define ADC8(i) case 0x88 + (i): tmp = REG##i; cy = CY; fadd(A, tmp, tmp2 = A + tmp + cy, cy); A = tmp2; break;
 			SET7(ADC8)
 			// add (hl)
 			case 0x86:
 			tmp = ld8(HL);
-			fadd(A, tmp2 = A + tmp, 0);
+			fadd(A, tmp, tmp2 = A + tmp, 0);
 			A = tmp2;
 			if (rofs) {
 				pc++;
@@ -940,12 +928,15 @@ int32_t Z80::Execute(int32_t n) {
 			}
 			break;
 			// add reg
-#define ADD8(i) case 0x80 + (i): tmp = REG##i; fadd(A, tmp2 = A + tmp, 0); A = tmp2; break;
+#define ADD8(i) case 0x80 + (i): tmp = REG##i; fadd(A, tmp, tmp2 = A + tmp, 0); A = tmp2; break;
 			SET7(ADD8)
 			case 0x76:
+#ifdef Z80_DEBUG
 			Halt();
+#else
 			pc--;
 			halt = true;
+#endif
 			break;
 			// ld (hl),reg
 #define LD_HL_REG(i) case 0x70 + (i): st8(HL, REGFIX##i); if (rofs) { pc++; CLOCK(4); } break;
@@ -1187,10 +1178,10 @@ int32_t Z80::Execute(int32_t n) {
 	}
 #if CLOCK_EMU
 	while (!halt && clock < n);
-	return clock - n;
+	return halt ? 0 : clock - n;
 #else
 	while (!halt && --n > 0);
-	return -n;
+	return halt ? 0 : -n;
 #endif
 }
 
@@ -1309,7 +1300,7 @@ void Z80::DDCB_FDCB() {
 }
 
 int Z80::ResolvC() {
-	uint32_t sw = 0;
+	uint32_t sw;
 	FlagDecision *p;
 	for (p = fp - 1; p >= fbuf && !(sw = p->dm & 0xf); p--)
 		;
@@ -1343,7 +1334,7 @@ int Z80::ResolvC() {
 }
 
 int Z80::ResolvN() {
-	uint32_t sw = 0;
+	uint32_t sw;
 	FlagDecision *p;
 	for (p = fp - 1; p >= fbuf && !(sw = p->dm & 0xf0); p--)
 		;
@@ -1369,27 +1360,27 @@ int Z80::ResolvN() {
 }
 
 int Z80::ResolvPV() {
-	uint32_t sw = 0;
+	uint32_t sw;
 	FlagDecision *p;
 	for (p = fp - 1; p >= fbuf && !(sw = p->dm & 0xf00); p--)
 		;
 #ifdef Z80_DEBUG
 	if (p < fbuf) Halt();
 #endif
-	int x;
 	switch (sw >> 8) {
+		int x;
 		case FZERO:
 		break;
 		case FBEFORE:
 		return p->b & MPV;
 		case FADD8:
-		return (~(p->b ^ p->a - p->b) & 0x80 && (p->b ^ p->a) & 0x80) << LPV;
+		return ((p->b & p->s & ~p->a) | (~p->b & ~p->s & p->a)) >> (7 - LPV) & MPV;
 		case FSUB8:
-		return ((p->b ^ p->b - p->a) & 0x80 && (p->b ^ p->a) & 0x80) << LPV;
+		return ((p->b & ~p->s & ~p->a) | (~p->b & p->s & p->a)) >> (7 - LPV) & MPV;
 		case FADD16:
-		return (~(p->b ^ p->a - p->b) & 0x8000 && (p->b ^ p->a) & 0x8000) << LPV;
+		return ((p->b & p->s & ~p->a) | (~p->b & ~p->s & p->a)) >> (15 - LPV) & MPV;
 		case FSUB16:
-		return ((p->b ^ p->b - p->a) & 0x8000 && (p->b ^ p->a) & 0x8000) << LPV;
+		return ((p->b & ~p->s & ~p->a) | (~p->b & p->s & p->a)) >> (15 - LPV) & MPV;
 		case FPARITY:
 		x = p->a;
 		x ^= x >> 4;
@@ -1416,7 +1407,7 @@ int Z80::ResolvPV() {
 }
 
 int Z80::ResolvH() {
-	uint32_t sw = 0;
+	uint32_t sw;
 	FlagDecision *p;
 	for (p = fp - 1; p >= fbuf && !(sw = p->dm & 0xf0000); p--)
 		;
@@ -1450,7 +1441,7 @@ int Z80::ResolvH() {
 }
 
 int Z80::ResolvZ() {
-	uint32_t sw = 0;
+	uint32_t sw;
 	FlagDecision *p;
 	for (p = fp - 1; p >= fbuf && !(sw = p->dm & 0xf000000); p--)
 		;
@@ -1476,7 +1467,7 @@ int Z80::ResolvZ() {
 }
 
 int Z80::ResolvS() {
-	uint32_t sw = 0;
+	uint32_t sw;
 	FlagDecision *p;
 	for (p = fp - 1; p >= fbuf && !(sw = p->dm & 0xf0000000); p--)
 		;
