@@ -2379,7 +2379,7 @@ void PC8012Service(LPVOID* arg4bs) {
                         iserroroccruuedondu = false;
                         for (int cnt = 0; cnt < amountofsec; cnt++) {
                             fddrivebus(0, 0, (cnt)+sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 1);
-                            memcpy(&fddcmemory[(cnt * 256) + 0x1000], readbuf4fddrivebus, 256);
+                            memcpy(&fddcmemory[(cnt * 256) + 0x1000], readbuf4fddrivebus + (driveid * 256), 256);
                         }
                     }
                     else {
@@ -3278,14 +3278,17 @@ void ResetEmu() {
 
     if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
 
+    //memset(memory, 0, 65536);
+    //memset(fddcmemory, 0, 16384);
+    //memset(bankedmemory, 0, 0x8000 * 4);
     memset(memory, 0, 32768);
-    memset(fddcmemory, 0, 16384);
 
     GN8012_i8255.init_i8255();
-    GN8012_i8272.init_i8272a();
+    //GN8012_i8272.init_i8272a();
     GN8012.Reset();
 
     GN80_i8255.init_i8255();
+    GN80_i8255_2.init_i8255();
     z80irqmaxes = 8;
 
     Z80Init();
@@ -3341,6 +3344,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
 
     GN80_i8255.init_i8255();
     GN80_i8255.i8255phaccess = i8255mac_GN80;
+    GN80_i8255_2.init_i8255();
 
     for (int cnt = 0; cnt < 4; cnt++) {
         GN8012_i8272.Diskstat[cnt].fddphyaccess = fddrivebus;
@@ -3672,6 +3676,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    ShowWindow(hWnd, nCmdShow);
    UpdateWindow(hWnd);
    CreateThread(0, 0, (LPTHREAD_START_ROUTINE)checkthefddaccess, (LPVOID)hWnd, 0, 0);
+   if (ispc8801 == true) {
+       ModifyMenuA(GetSubMenu(GetMenu(hWnd),3), ID_DIPSW_N80, MF_STRING, ID_DIPSW_N80, "N88 / N BASIC");
+   }
 
    return TRUE;
 }
