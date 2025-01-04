@@ -3281,7 +3281,9 @@ void ResetEmu() {
     //memset(memory, 0, 65536);
     //memset(fddcmemory, 0, 16384);
     //memset(bankedmemory, 0, 0x8000 * 4);
-    memset(memory, 0, 32768);
+    if (ispc8801 == false) {
+        memset(memory, 0, 32768);
+    }
 
     GN8012_i8255.init_i8255();
     //GN8012_i8272.init_i8272a();
@@ -3799,7 +3801,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
             case ID_DIPSW_V1:
                 bsmode ^= 0x80;
-                crtc2 ^= 2;
                 break;
             case ID_DIPSW_4MHZ:
                 is8mhz = is8mhz ? false : true;
