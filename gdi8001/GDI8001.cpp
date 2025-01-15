@@ -3631,6 +3631,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(lpCmdLine);
 
     for (int cnt = 0; cnt < 25; cnt++) { colorbool[cnt] = 0xff; }
+    bsmode = 0xc0;
 
     beepinit();
 
@@ -3993,6 +3994,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    if (ispc8801 == true) {
        ModifyMenuA(GetSubMenu(GetMenu(hWnd),3), ID_DIPSW_N80, MF_STRING, ID_DIPSW_N80, "N88 / N BASIC");
    }
+   CheckMenuItem(GetMenu(hWnd), ID_DIPSW_N80, MF_BYCOMMAND | ((crtc2 & 1) ? MF_CHECKED : MF_UNCHECKED));
+   CheckMenuItem(GetMenu(hWnd), ID_DIPSW_STANDARD, MF_BYCOMMAND | (!(bsmode & 0x40) ? MF_CHECKED : MF_UNCHECKED));
+   CheckMenuItem(GetMenu(hWnd), ID_DIPSW_V1, MF_BYCOMMAND | (!(bsmode & 0x80) ? MF_CHECKED : MF_UNCHECKED));
+   CheckMenuItem(GetMenu(hWnd), ID_DIPSW_4MHZ, MF_BYCOMMAND | (is8mhz ? MF_CHECKED : MF_UNCHECKED));
 
    return TRUE;
 }
@@ -4111,11 +4116,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
             case ID_DIPSW_STANDARD:
                 bsmode ^= 0x40;
-                CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | ((bsmode & 0x40) ? MF_CHECKED : MF_UNCHECKED));
+                CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | (!(bsmode & 0x40) ? MF_CHECKED : MF_UNCHECKED));
                 break;
             case ID_DIPSW_V1:
                 bsmode ^= 0x80;
-                CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | ((bsmode & 0x80) ? MF_CHECKED : MF_UNCHECKED));
+                CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | (!(bsmode & 0x80) ? MF_CHECKED : MF_UNCHECKED));
                 break;
             case ID_DIPSW_4MHZ:
                 is8mhz = is8mhz ? false : true;
