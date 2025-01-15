@@ -3260,7 +3260,7 @@ void DrawGrp() {
                             uint8 charattributetmp = 0;
                             for (int cnt = 19; cnt >= 0; cnt--) {
                                 if ((crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x80)) { isattributerouleschanged = true; }
-                                uint8 charattributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if ((attributetmp == drawbackx && attributetmp > attributeold && isattributerouleschanged == false) || (((attributetmp) > drawbackx) && isattributerouleschanged == true)) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { semigraphicenabled = false; } } } else { attributetmp3 = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if ((attributetmp3 == drawbackx && isattributerouleschanged == false) || (((attributetmp3) > drawbackx) && isattributerouleschanged == true) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
+                                uint8 charattributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if ((attributetmp == drawbackx && isattributerouleschanged == false) || (((attributetmp) > drawbackx) && isattributerouleschanged == true)) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { charattribute = charattribute & 0x7F; semigraphicenabled = false; } } } else { attributetmp3 = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if ((attributetmp3 == drawbackx && isattributerouleschanged == false) || (((attributetmp3) > drawbackx) && isattributerouleschanged == true) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
                             }
                         }
                         if (semigraphicenabled == true) { charattribute |= 128; }
@@ -4107,15 +4107,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
             case ID_DIPSW_N80:
                 crtc2 ^= 1;
+                CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | ((crtc2 & 1) ? MF_CHECKED : MF_UNCHECKED));
                 break;
             case ID_DIPSW_STANDARD:
                 bsmode ^= 0x40;
+                CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | ((bsmode & 0x40) ? MF_CHECKED : MF_UNCHECKED));
                 break;
             case ID_DIPSW_V1:
                 bsmode ^= 0x80;
+                CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | ((bsmode & 0x80) ? MF_CHECKED : MF_UNCHECKED));
                 break;
             case ID_DIPSW_4MHZ:
                 is8mhz = is8mhz ? false : true;
+                CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | (is8mhz ? MF_CHECKED : MF_UNCHECKED));
                 break;
             case ID_32778:
                 ttyconnected = false;
