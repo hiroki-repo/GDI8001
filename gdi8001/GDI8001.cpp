@@ -2039,10 +2039,13 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x2B:
         case 0x2D:
         case 0x2F:
-            if (upd8251configate == 5) { uPD8251config[3] = (prm_1 & 0xFF);/*=(upd8251config&0x00FFFFFF)|((_z80_data&0xFF)<<24)*/ }
-            else if (upd8251configate == 1) { uPD8251config[0] = (prm_1 & 0xFF); if (uPD8251config[0] & 0x40) { cmtreseted = true; uPD8251config[0] = 0; uPD8251config[1] = 0; uPD8251config[2] = 0; uPD8251config[3] = 0; upd8251configate = 0; } if (uPD8251config[0] & 0x10) { uPD8251config[1] &= ~0x38; overrunerror = false; rxdataready = false; }/*upd8251config=(upd8251config&0xFFFFFF00)|((_z80_data&0xFF)<<0)*/ }
-            else if (upd8251configate == 0) { uPD8251config[2] = (prm_1 & 0xFF); if (!(uPD8251config[2] & 3)) { if (uPD8251config[2] & 0x80) { upd8251configate = 3; } else { upd8251configate = 4; } } }
-            if (upd8251configate != 0 || uPD8251config[0] != 0 || uPD8251config[1] != 0 || uPD8251config[2] != 0 || uPD8251config[3] != 0) { upd8251configate++; if (upd8251configate == 2 || upd8251configate == 6) { upd8251configate = 1; } }
+        {
+            bool configreseted = false;
+            if (upd8251configate == 3) { uPD8251config[3] = (prm_1 & 0xFF);/*=(upd8251config&0x00FFFFFF)|((_z80_data&0xFF)<<24)*/ }
+            else if (upd8251configate == 1) { uPD8251config[0] = (prm_1 & 0xFF); if (uPD8251config[0] & 0x40) { upd8251configate = 0; configreseted = true; return 0xff; } if (uPD8251config[0] & 0x10) { uPD8251config[1] &= ~0x38; overrunerror = false; rxdataready = false; } /*upd8251config=(upd8251config&0xFFFFFF00)|((_z80_data&0xFF)<<0)*/ }
+            else if (upd8251configate == 0) { uPD8251config[2] = (prm_1 & 0xFF); configreseted = true; if (uPD8251config[2] & 3) { upd8251configate = 1; } else if (uPD8251config[2] & 0x80) { upd8251configate = 3; } else { upd8251configate = 2; } }
+            if (configreseted == false) { upd8251configate++; if (upd8251configate == 2 || upd8251configate == 4) { upd8251configate = 1; } }
+        }
             break;
         case 0x30:
         case 0x36:
@@ -2385,9 +2388,6 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x2B:
         case 0x2D:
         case 0x2F:
-            if (ttyconnected == false) {
-                return 0x07 | ((cmtreseted ? 1 : 0) << 7);
-            }
             return uPD8251config[1] | (( rxdataready ? 1 : 0 ) << 1) | ( ( (uPD8251config[0] & 1 ) ? 1 : 0) << 0 ) | ((serialstatw ? 1 : 0) << 0) | ((cmtreseted ? 1 : 0) << 7) | 4;
             break;
         case 0x30:
@@ -3246,10 +3246,11 @@ void DrawGrp() {
             bool isattributerouleschanged = false;
 
             for (int drawbacky = 0; drawbacky < 25; drawbacky++) {
+                semigraphicenabled = false;
                 for (int drawbackx = 0; drawbackx < 80; drawbackx++) {
                     uint8 char4show = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx)+(drawbacky * 120)), 0, 1);
                     attributetmp = -1; attributeold = -1; fontcolors = colorbool[drawbacky]; grpcolors = colorbool[drawbacky]; attributegcold = false;
-                    attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1; semigraphicenabled = false;
+                    attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1;
                     if (crtcatsc != 1) {
                         if (crtcatsc & 4) {
                             for (int cnt = 0; cnt < 120; cnt++) {
@@ -3460,7 +3461,7 @@ void ResetEmu() {
     beepenabled = true;
     beepenabled2 = false;
     uPD8251config[0]=0;
-    uPD8251config[1]=0;
+    uPD8251config[1]&=~0x38;
     uPD8251config[2]=0;
     uPD8251config[3]=0;
     upd8251configate = 0;
@@ -4047,7 +4048,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             //初期化(これをしないとごみが入る)
             ZeroMemory(FileName, MAX_PATH * 2);
             //「ファイルを開く」ダイアログを表示
-            //uPD8251config[1] = 0x7;
+            uPD8251config[1] = 0x7;
             if (OpenDiaog(hWnd, "CMT File(*.cmt)\0*.cmt\0All Files(*.*)\0*.*\0\0",
                 FileName, OFN_PATHMUSTEXIST | /*OFN_FILEMUSTEXIST | */OFN_HIDEREADONLY)) {
                 //MessageBoxA(0, FileName,"A", 0);
@@ -4136,7 +4137,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 //初期化(これをしないとごみが入る)
                 ZeroMemory(FileName, MAX_PATH * 2);
                 //「ファイルを開く」ダイアログを表示
-                //uPD8251config[1] = 0x7;
+                uPD8251config[1] = 0x7;
                 if (OpenDiaog(hWnd, "CMT File(*.cmt)\0*.cmt\0All Files(*.*)\0*.*\0\0",
                     FileName, OFN_PATHMUSTEXIST | /*OFN_FILEMUSTEXIST | */OFN_HIDEREADONLY)) {
                     //MessageBoxA(0, FileName,"A", 0);
