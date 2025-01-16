@@ -2149,7 +2149,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
                     case 1:
                         crtcatsc = (prm_1 >> 5) & 7;
                         colorgraphicmode = ((prm_1 >> 4) & 0x1) ? true : false;
-                        attributesize = _min((prm_1 & 0x1f), 20);
+                        attributesize = _min((prm_1 & 0x1f) + 1, 20);
                         crtcactive = 0;
                         break;
                     case 3:
