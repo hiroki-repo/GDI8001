@@ -3019,8 +3019,8 @@ void myFillRect(HDC prm_0,const RECT* prm_2, HBRUSH prm_3) {
     colorpaletmp = (((colorpaletmp >> (8 * 0)) & 0xFF) << (8 * 2)) | (((colorpaletmp >> (8 * 1)) & 0xFF) << (8 * 1)) | (((colorpaletmp >> (8 * 2)) & 0xFF) << (8 * 0));
     for (int cnt2 = prm_2->left; cnt2 < prm_2->right; cnt2++) {
         for (int cnt = prm_2->top; cnt < prm_2->bottom; cnt++) {
-            if (cnt <= 479 && cnt2 <= 639 && cnt >= 0 && cnt2 >= 0) {
-                (*(UINT32*)(&pBit[((479 - cnt) * (640 * 4)) + (cnt2 * 4)])) = colorpaletmp;
+            if (cnt <= 399 && cnt2 <= 639 && cnt >= 0 && cnt2 >= 0) {
+                (*(UINT32*)(&pBit[((399 - cnt) * (640 * 4)) + (cnt2 * 4)])) = colorpaletmp;
             }
         }
     }
@@ -3030,7 +3030,7 @@ void SetPalette4emu(int prm_0) { color4draw = prm_0 + (greenmonitor ? 128 : 0); 
 void SetPalette4emu2(int prm_0) { color4draw = prm_0 + (greenmonitor ? 768 : 256); }
 
 void SetPset2(int prm_0, int prm_1) {
-    xsiz10times = colorfullgraphicmode ? ((ispc8801 == true) ? 100 : 200) : 100; ysiz10times = (hiresgrpresol200 == false && ispc8801 == true) ? 120 : ((colorfullgraphicmode == true && hiresgrpresol200 == true) ? 120 : 240);
+    xsiz10times = colorfullgraphicmode ? ((ispc8801 == true) ? 100 : 200) : 100; ysiz10times = (hiresgrpresol200 == false && ispc8801 == true) ? 100 : ((colorfullgraphicmode == true && hiresgrpresol200 == true) ? 100 : 200);
     //xsiz10times = pc8001widthflag ? 10 : 20; ysiz10times = grpheight25 ? 24 : 30;
     //xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 213 : 267;
     //xsiz10times = 10; ysiz10times = 10;
@@ -3069,7 +3069,7 @@ void SetPset2(int prm_0, int prm_1) {
     }
 }
 void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
-    xsiz10times = colorfullgraphicmode ? ((ispc8801 == true) ? 100 : 200) : 100; ysiz10times = (hiresgrpresol200 == false && ispc8801 == true) ? 120 : ((colorfullgraphicmode == true && hiresgrpresol200 == true) ? 120 : 240);
+    xsiz10times = colorfullgraphicmode ? ((ispc8801 == true) ? 100 : 200) : 100; ysiz10times = (hiresgrpresol200 == false && ispc8801 == true) ? 100 : ((colorfullgraphicmode == true && hiresgrpresol200 == true) ? 100 : 200);
     //xsiz10times = pc8001widthflag ? 10 : 20; ysiz10times = grpheight25 ? 24 : 30;
     //xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 213 : 267;
     //xsiz10times = 10; ysiz10times = 10;
@@ -3123,7 +3123,7 @@ void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
 }
 
 void SetPset(int prm_0, int prm_1) {
-    xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 240 : 300;
+    xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 200 : 250;
     //xsiz10times = pc8001widthflag ? 10 : 20; ysiz10times = grpheight25 ? 24 : 30;
     //xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 213 : 267;
     //xsiz10times = 10; ysiz10times = 10;
@@ -3144,7 +3144,7 @@ void SetPset(int prm_0, int prm_1) {
     }
 }
 void SetBox(int prm_0, int prm_1, int prm_2, int prm_3) {
-    xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 240 : 300;
+    xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 200 : 250;
     //xsiz10times = pc8001widthflag ? 10 : 20; ysiz10times = grpheight25 ? 24 : 30;
     //xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 213 : 267;
     //xsiz10times = 10; ysiz10times = 10;
@@ -3169,7 +3169,7 @@ void SetBGCL(){
     rs.left = 0;
     rs.top = 0;
     rs.right = 640;
-    rs.bottom = 480;
+    rs.bottom = 400;
     myFillRect(hCDC, &rs, hBackGround[color4draw]);
 }
 
@@ -3435,11 +3435,11 @@ void DrawGrp() {
     RECT rw4rend;
     if (bool4showwin) {
         GetClientRect(hwnd4mw, &rw4rend);
-        if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { SetStretchBltMode(hdc, (isharftoneenabled ? STRETCH_HALFTONE : COLORONCOLOR)); StretchBlt(hdc, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 480, SRCCOPY); if (isharftoneenabled == true){ SetBrushOrgEx(hdc, 0, 0, NULL); } }
+        if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { SetStretchBltMode(hdc, (isharftoneenabled ? STRETCH_HALFTONE : COLORONCOLOR)); StretchBlt(hdc, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 400, SRCCOPY); if (isharftoneenabled == true){ SetBrushOrgEx(hdc, 0, 0, NULL); } }
     }
     else {
         GetClientRect(HWNDfullscr, &rw4rend);
-        if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { SetStretchBltMode(hdcfullscr, (isharftoneenabled ? STRETCH_HALFTONE : COLORONCOLOR)); StretchBlt(hdcfullscr, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 480, SRCCOPY); if (isharftoneenabled == true){ SetBrushOrgEx(hdcfullscr, 0, 0, NULL); } }
+        if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { SetStretchBltMode(hdcfullscr, (isharftoneenabled ? STRETCH_HALFTONE : COLORONCOLOR)); StretchBlt(hdcfullscr, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 400, SRCCOPY); if (isharftoneenabled == true){ SetBrushOrgEx(hdcfullscr, 0, 0, NULL); } }
     }
 }
 
@@ -3953,17 +3953,17 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    pbi->biSize = sizeof(BITMAPINFOHEADER);
    pbi->biWidth = 640;
-   pbi->biHeight = 480;
+   pbi->biHeight = 400;
    pbi->biPlanes = 1;
 
    //hdcb = CreateCompatibleDC(hdc);
    hbDib = CreateDIBSection(hdc, (BITMAPINFO*)pbi, DIB_RGB_COLORS, (void**)&pBit, NULL, 0);
    hCDC = CreateCompatibleDC(hdc);
-   //hCBitmap = CreateCompatibleBitmap(hdc, 640, 480);
+   //hCBitmap = CreateCompatibleBitmap(hdc, 640, 400);
    hCBitmap = 0;
    hCDCfullscr = CreateCompatibleDC(hdcfullscr);
    hbOld = (HBITMAP)SelectObject(hCDC, hbDib);
-   hCBitmapfullscr = CreateCompatibleBitmap(hdcfullscr, 640, 480);
+   hCBitmapfullscr = CreateCompatibleBitmap(hdcfullscr, 640, 400);
    hPen = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
    for (int cnt = 0; cnt < 1280; cnt++) {
        if (cnt < 8) { hBackGround[cnt] = CreateSolidBrush(RGB(((cnt >> 1) & 1) * 255, ((cnt >> 2) & 1) * 255, ((cnt >> 0) & 1) * 255)); }
@@ -4236,7 +4236,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             //Rectangle(hdc, 0, 0, 640, 480);  // 描画
             RECT rw4rend;
             GetClientRect(hWnd, &rw4rend);
-            if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { SetStretchBltMode(hdc, (isharftoneenabled ? STRETCH_HALFTONE : COLORONCOLOR)); StretchBlt(hdc, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 480, SRCCOPY); if (isharftoneenabled == true) { SetBrushOrgEx(hdc, 0, 0, NULL); } }
+            if ((rw4rend.right != 0) && (rw4rend.bottom != 0)) { SetStretchBltMode(hdc, (isharftoneenabled ? STRETCH_HALFTONE : COLORONCOLOR)); StretchBlt(hdc, 0, 0, rw4rend.right, rw4rend.bottom, hCDC, 0, 0, 640, 400, SRCCOPY); if (isharftoneenabled == true) { SetBrushOrgEx(hdc, 0, 0, NULL); } }
             EndPaint(hWnd, &ps);
     }
         break;
