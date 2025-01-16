@@ -373,6 +373,7 @@ uint8 pc8001keybool[0x10];
 
 uint8 showstatefor88grp = 0;
 
+uint8 attributesize = 20;
 bool ispc8801 = false;
 bool rommode = false;
 bool hiresgrpresol200 = false;
@@ -2148,6 +2149,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
                     case 1:
                         crtcatsc = (prm_1 >> 5) & 7;
                         colorgraphicmode = ((prm_1 >> 4) & 0x1) ? true : false;
+                        attributesize = _min((prm_1 & 0x1f), 20);
                         crtcactive = 0;
                         break;
                     case 3:
@@ -3253,14 +3255,17 @@ void DrawGrp() {
                     attributeold2 = -1; attributetmp2 = -1; attributeold3 = -1; attributetmp3 = -1;
                     if (crtcatsc != 1) {
                         if (crtcatsc & 4) {
-                            for (int cnt = 0; cnt < 120; cnt++) {
-                                if ((crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 1) + 0) + (drawbacky * 120)), 0, 1) & 0x80)) { if ((ioporte6h & 2) && ispc8801 == true) { if ((upd3301stat & 0x10) && !(upd3301intm & 2)) { upd3301stat |= 4; } Z80INT(2); } charattribute = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 1) + 0) + (drawbacky * 120)), 0, 1) & 0x7F; }
+                            for (int cnt = 0; cnt < attributesize; cnt++) {
+                                grpcolors = 7; fontcolors = 7;
+                                if (dmatc[2] >= ((chkedbb8 * 0xbb8) + ((drawbackx)+(drawbacky * (80 + (attributesize * 2)))) + (cnt + 80))) { upd3301stat |= 8; }
+                                if ((ioporte6h & 2) && ispc8801 == true) { if ((upd3301stat & 0x10) && !(upd3301intm & 2)) { upd3301stat |= 4; } Z80INT(2); } charattribute = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 1) + (drawbacky * (80 + (attributesize * 2)))), 0, 1) & 0xFF;
                             }
                         }
                         else {
                             isattributerouleschanged = false;
                             uint8 charattributetmp = 0;
                             for (int cnt = 19; cnt >= 0; cnt--) {
+                                if (dmatc[2] >= ((chkedbb8 * 0xbb8) + ((drawbackx)+(drawbacky * 120)) + (cnt + 80))) { upd3301stat |= 8; }
                                 if ((crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x80)) { isattributerouleschanged = true; }
                                 uint8 charattributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 81) + (drawbacky * 120)), 0, 1); if ((crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1) & 0x7F) != (64 | 32)) { if (charattributetmp & 8) { attributetmp = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if ((attributetmp == drawbackx && isattributerouleschanged == false) || (((attributetmp) > drawbackx) && isattributerouleschanged == true)) { attributeold = attributetmp; fontcolors = (charattributetmp >> 5) & 7; grpcolors = (charattributetmp >> 5) & 7; if (charattributetmp & 16) { semigraphicenabled = true; } else { charattribute = charattribute & 0x7F; semigraphicenabled = false; } } } else { attributetmp3 = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + (((cnt * 2) + 80) + (drawbacky * 120)), 0, 1); if ((attributetmp3 == drawbackx && isattributerouleschanged == false) || (((attributetmp3) > drawbackx) && isattributerouleschanged == true) || (((((charattributetmp & 128) ? true : false) != attributegcold) && (charattributetmp & 128)))) { charattribute = charattributetmp; attributeold3 = attributetmp3; attributegcold = (charattributetmp & 128) ? true : false; } } }
                             }
@@ -3272,7 +3277,7 @@ void DrawGrp() {
                     }
                     else {
                         graphiccodes[(80 * drawbacky) + drawbackx][0] = 0;
-                        graphiccodes[(80 * drawbacky) + drawbackx][1] = 0;
+                        graphiccodes[(80 * drawbacky) + drawbackx][1] = 7;
                         colorbool[drawbacky] = 0xFF;
                     }
                 }
@@ -3281,7 +3286,6 @@ void DrawGrp() {
                 charattributefinal = charattribute;
             }
             else { charattributefinal = 0; }
-            upd3301stat |= 8;
             if (fullgraphicdraw == true) {
 
                 if (ispc8801 == true) {
@@ -3454,6 +3458,7 @@ void Drawbackground(LPVOID* arg4dbg) {
 }
 
 void ResetEmu() {
+    attributesize = 20;
     biosromenabled = false;
 
     clockcount = 0;
