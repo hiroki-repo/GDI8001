@@ -38,6 +38,9 @@ bool isbeepplayed = false;
 bool isbeepplayed2 = false;
 bool bool4showwin = true;
 
+bool isfullspeedenabled = false;
+bool speeddecinfullspeed = false;
+
 //#define SRATE    44100    //標本化周波数(1秒間のサンプル数)
 #define SRATE    55467    //標本化周波数(1秒間のサンプル数)
 #define F        2400     //周波数(1秒間の波形数)
@@ -512,6 +515,7 @@ HDC hCDCfullscr;
 HBITMAP hCBitmapfullscr;
 HPEN hPen;
 HBRUSH hBackGround[1280];
+UINT32 cBackGround[1280];
 RECT rs;
 
 HBITMAP hbDib;
@@ -2362,6 +2366,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x0D:
         case 0x0E:
         case 0x0F:
+            if (isfullspeedenabled == true) { speeddecinfullspeed = true; }
             return ~pc8001keybool[prm_0 & 0xF];
             break;
         case 0x20:
@@ -2589,7 +2594,7 @@ extern void DrawGrp();
 void Z80INT(uint8 prm_0) { if (((intmasklevel & 0x8) == 0 && ((prm_0 / 2) >= (intmasklevel & 0x7))) && ispc8801 == true/* || ((intmasklevel & 0x8) && ((prm_0 / 2) > z80irqmaxes))*/) { return; } z80irqmaxes = prm_0 / 2; if (z80irqid >= 3 && z80irqid < 10) { z80irqid++; } else { if (z80irqid != 10) { z80irqid = 3; } } z80irqfnqueue[z80irqfnqueuepos] = prm_0; z80irqfnqueuepos = ((z80irqfnqueuepos + 1) & 0x7); }
 void Z80NMI() { z80irqid = 2; }
 
-void RunZ80Infinity(LPVOID* arg4rz80) { bool boolofwaitiinz80loop = true; UINT32 clockcounttemporary = 0; UINT32 clockcountold = 0; SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { clockcountold = clockcount; int clockcountinternal = 0; int clockcountinternalold = 0; int z80timerbefore = time(NULL); while ((clockcount - clockcountold) < ((is8mhz ? 2 : 1) * (crtcactive ? 1830000 : 4000000))) { boolofwaitiinz80loop = (boolofwaitiinz80loop) ? false : true; clockcountinternalold = 0; clockcountinternal = 0; GetSystemTime(&st_st); UINT32 Z80Corepfclock = (crtcactive ? 1830000 : 4000000); ispc80threadinrunningemulation = true; isbeepenabledinthecool = false; isbeepenabledinthecool2 = false; while (clockcountinternal < ((is8mhz ? 2 : 1) * (Z80Corepfclock / 60))) { while ((clockcountinternal - clockcountinternalold) < ((is8mhz ? 2 : 1) * (Z80Corepfclock / 600))) { for (int clockcountinternal2 = 0; clockcountinternal2 < ((Z80Corepfclock / 3 / 600) * 2); clockcountinternal2) { vbi = false; if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else if (z80irqid >= 3 && z80irqid <= 10) { Z80DoIRQ(z80irqfnqueue[z80irqfnqueuepos2]); z80irqfnqueuepos2 = ((z80irqfnqueuepos2 + 1) & 0x7); for (int cnt = 0; cnt < 10000; cnt++) { clockcounttemporary = Z80Run(); clockcountinternal += clockcounttemporary; clockcountinternal2 += clockcounttemporary; clockcount += clockcounttemporary; } } else { Z80DoNMI(); } if (z80irqid > 3 && z80irqid <= 10) { z80irqid--; } else { z80irqid = 0; } } vbi = false; clockcounttemporary = Z80Run(); z80irqmaxes = 8; clockcountinternal += clockcounttemporary; clockcountinternal2 += clockcounttemporary; clockcount += clockcounttemporary; } vbi = true; if ((ioporte6h & 2) && ispc8801 == true) { if ((upd3301stat & 0x10) && !(upd3301intm & 1)) { upd3301stat |= 2; } Z80INT(2); z80irqmaxes = 8; } for (int clockcountinternal2 = 0; clockcountinternal2 < ((Z80Corepfclock / 3 / 600) * 1); clockcountinternal2) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else if (z80irqid >= 3 && z80irqid <= 10) { Z80DoIRQ(z80irqfnqueue[z80irqfnqueuepos2]); z80irqfnqueuepos2 = ((z80irqfnqueuepos2 + 1) & 0x7); for (int cnt = 0; cnt < 10000; cnt++) { clockcounttemporary = Z80Run(); clockcountinternal += clockcounttemporary; clockcountinternal2 += clockcounttemporary; clockcount += clockcounttemporary; } } else { Z80DoNMI(); } if (z80irqid > 3 && z80irqid <= 10) { z80irqid--; } else { z80irqid = 0; } } vbi = true; clockcounttemporary = Z80Run(); z80irqmaxes = 8; clockcountinternal += clockcounttemporary; clockcountinternal2 += clockcounttemporary; clockcount += clockcounttemporary; }  /*vbi = vbi ? false : true;*/ if (ioporte6h & 1) { Z80INT(4); } } clockcountinternalold = clockcountinternal; } ispc80threadinrunningemulation = false; /*clockcount += clockcountinternal; /*drawgrpbool = true;*/ if (beepenabled) { beeprestart(); beep2400play(); } if (beepenabled2 && ispc8801 == true) { beep2restart(); beep2play(); } howmanybeepstopped = 0; howmanybeepstopped_2 = 0; GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < (16 + (boolofwaitiinz80loop ? 1 : 0))) { Sleep((16 + (boolofwaitiinz80loop ? 1 : 0)) - ststgoal16); } }/*while (z80timerbefore == time(NULL)) {}*/ } }//UINT32 z80timemintab[2] = { 0, 0 }; SYSTEMTIME z80timeminta; while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal = 0; GetSystemTime(&z80timeminta); z80timemintab[0] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); while (clockcountinternal < (graphicdraw ? 183000 : 400000)) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } clockcountinternal += Z80Run(); vbi = vbi ? false : true; } GetSystemTime(&z80timeminta); z80timemintab[1] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); clockcount += clockcountinternal; int timetowaitive = (z80timemintab[1] - z80timemintab[0]); /*if (timetowaitive < 0) { timetowaitive += 1000; }*/ if ((timetowaitive > 0) && (timetowaitive <= 100)) { Sleep(100 - timetowaitive); } else { Sleep(100); } } int z80timerint = time(NULL) - z80timerbefore; /*if (z80timerint < 1000) { Sleep(1000 - z80timerint); }*/ } }
+void RunZ80Infinity(LPVOID* arg4rz80) { bool boolofwaitiinz80loop = true; UINT32 clockcounttemporary = 0; UINT32 clockcountold = 0; SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { clockcountold = clockcount; int clockcountinternal = 0; int clockcountinternalold = 0; int z80timerbefore = time(NULL); while ((clockcount - clockcountold) < ((is8mhz ? 2 : 1) * (crtcactive ? 1830000 : 4000000))) { boolofwaitiinz80loop = (boolofwaitiinz80loop) ? false : true; clockcountinternalold = 0; clockcountinternal = 0; GetSystemTime(&st_st); UINT32 Z80Corepfclock = (crtcactive ? 1830000 : 4000000); ispc80threadinrunningemulation = true; isbeepenabledinthecool = false; isbeepenabledinthecool2 = false; while (clockcountinternal < ((is8mhz ? 2 : 1) * (Z80Corepfclock / 60))) { while ((clockcountinternal - clockcountinternalold) < ((is8mhz ? 2 : 1) * (Z80Corepfclock / 600))) { for (int clockcountinternal2 = 0; clockcountinternal2 < ((Z80Corepfclock / 3 / 600) * 2); clockcountinternal2) { vbi = false; if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else if (z80irqid >= 3 && z80irqid <= 10) { Z80DoIRQ(z80irqfnqueue[z80irqfnqueuepos2]); z80irqfnqueuepos2 = ((z80irqfnqueuepos2 + 1) & 0x7); for (int cnt = 0; cnt < 10000; cnt++) { clockcounttemporary = Z80Run(); clockcountinternal += clockcounttemporary; clockcountinternal2 += clockcounttemporary; clockcount += clockcounttemporary; } } else { Z80DoNMI(); } if (z80irqid > 3 && z80irqid <= 10) { z80irqid--; } else { z80irqid = 0; } } vbi = false; clockcounttemporary = Z80Run(); z80irqmaxes = 8; clockcountinternal += clockcounttemporary; clockcountinternal2 += clockcounttemporary; clockcount += clockcounttemporary; } vbi = true; if ((ioporte6h & 2) && ispc8801 == true) { if ((upd3301stat & 0x10) && !(upd3301intm & 1)) { upd3301stat |= 2; } Z80INT(2); z80irqmaxes = 8; } for (int clockcountinternal2 = 0; clockcountinternal2 < ((Z80Corepfclock / 3 / 600) * 1); clockcountinternal2) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else if (z80irqid >= 3 && z80irqid <= 10) { Z80DoIRQ(z80irqfnqueue[z80irqfnqueuepos2]); z80irqfnqueuepos2 = ((z80irqfnqueuepos2 + 1) & 0x7); for (int cnt = 0; cnt < 10000; cnt++) { clockcounttemporary = Z80Run(); clockcountinternal += clockcounttemporary; clockcountinternal2 += clockcounttemporary; clockcount += clockcounttemporary; } } else { Z80DoNMI(); } if (z80irqid > 3 && z80irqid <= 10) { z80irqid--; } else { z80irqid = 0; } } vbi = true; clockcounttemporary = Z80Run(); z80irqmaxes = 8; clockcountinternal += clockcounttemporary; clockcountinternal2 += clockcounttemporary; clockcount += clockcounttemporary; }  /*vbi = vbi ? false : true;*/ if (ioporte6h & 1) { Z80INT(4); } } clockcountinternalold = clockcountinternal; } ispc80threadinrunningemulation = false; /*clockcount += clockcountinternal; /*drawgrpbool = true;*/ if (beepenabled) { beeprestart(); beep2400play(); } if (beepenabled2 && ispc8801 == true) { beep2restart(); beep2play(); } howmanybeepstopped = 0; howmanybeepstopped_2 = 0; GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < (16 + (boolofwaitiinz80loop ? 1 : 0))) { if (isfullspeedenabled == false || speeddecinfullspeed == true) { Sleep((16 + (boolofwaitiinz80loop ? 1 : 0)) - ststgoal16); speeddecinfullspeed = false; } } }/*while (z80timerbefore == time(NULL)) {}*/ } }//UINT32 z80timemintab[2] = { 0, 0 }; SYSTEMTIME z80timeminta; while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal = 0; GetSystemTime(&z80timeminta); z80timemintab[0] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); while (clockcountinternal < (graphicdraw ? 183000 : 400000)) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } clockcountinternal += Z80Run(); vbi = vbi ? false : true; } GetSystemTime(&z80timeminta); z80timemintab[1] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); clockcount += clockcountinternal; int timetowaitive = (z80timemintab[1] - z80timemintab[0]); /*if (timetowaitive < 0) { timetowaitive += 1000; }*/ if ((timetowaitive > 0) && (timetowaitive <= 100)) { Sleep(100 - timetowaitive); } else { Sleep(100); } } int z80timerint = time(NULL) - z80timerbefore; /*if (z80timerint < 1000) { Sleep(1000 - z80timerint); }*/ } }
 
 void BeepService(LPVOID* arg4bs) { while (true) { if (beepenabled) { /*Beep(2400, 100);*/ beep2400play(); Sleep(16); } else { if (isbeepenabledinthecool == false) { beep2400stop(); } } if (beepenabled2) { /*Beep(2400, 100);*/ beep2play(); Sleep(16); } else { if (isbeepenabledinthecool2 == false) { beep2stop(); } } /*if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); }*/ } }
 void BeepService2(LPVOID* arg4bs) { while (true) { if (beepenabled2) { /*Beep(2400, 100);*/ beep2play(); Sleep(16); } else { if (isbeepenabledinthecool2 == false) { beep2stop(); } } /*if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); }*/ } }
@@ -3025,6 +3030,18 @@ void myFillRect(HDC prm_0,const RECT* prm_2, HBRUSH prm_3) {
         }
     }
 }
+void myFillRectcc(HDC prm_0, const RECT* prm_2, UINT32 prm_3) {
+    if (pBit == 0) { return; }
+    UINT32 colorpaletmp = prm_3;
+    colorpaletmp = (((colorpaletmp >> (8 * 0)) & 0xFF) << (8 * 2)) | (((colorpaletmp >> (8 * 1)) & 0xFF) << (8 * 1)) | (((colorpaletmp >> (8 * 2)) & 0xFF) << (8 * 0));
+    for (int cnt2 = prm_2->left; cnt2 < prm_2->right; cnt2++) {
+        for (int cnt = prm_2->top; cnt < prm_2->bottom; cnt++) {
+            if (cnt <= 399 && cnt2 <= 639 && cnt >= 0 && cnt2 >= 0) {
+                (*(UINT32*)(&pBit[((399 - cnt) * (640 * 4)) + (cnt2 * 4)])) = colorpaletmp;
+            }
+        }
+    }
+}
 
 void SetPalette4emu(int prm_0) { color4draw = prm_0 + (greenmonitor ? 128 : 0); }
 void SetPalette4emu2(int prm_0) { color4draw = prm_0 + (greenmonitor ? 768 : 256); }
@@ -3065,7 +3082,7 @@ void SetPset2(int prm_0, int prm_1) {
             }
         }
 #endif
-        myFillRect(hCDC, &rs, hBackGround[color4draw]);
+        myFillRectcc(hCDC, &rs, cBackGround[color4draw]);
     }
 }
 void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
@@ -3113,11 +3130,11 @@ void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
                 rs.top = ((((cnt * 2) + 0) * ysiz10times) / 100);
                 rs.right = (((prm_2 + 0) * xsiz10times) / 100);
                 rs.bottom = ((((cnt * 2) + 3) * ysiz10times) / 100);
-                myFillRect(hCDC, &rs, hBackGround[color4draw]);
+                myFillRectcc(hCDC, &rs, cBackGround[color4draw]);
             }
         }
         else {
-            myFillRect(hCDC, &rs, hBackGround[color4draw]);
+            myFillRectcc(hCDC, &rs, cBackGround[color4draw]);
         }
     }
 }
@@ -3140,7 +3157,7 @@ void SetPset(int prm_0, int prm_1) {
         DeleteObject(hbkgtmp);
     }
     else {
-        myFillRect(hCDC, &rs, hBackGround[color4draw]);
+        myFillRectcc(hCDC, &rs, cBackGround[color4draw]);
     }
 }
 void SetBox(int prm_0, int prm_1, int prm_2, int prm_3) {
@@ -3161,7 +3178,7 @@ void SetBox(int prm_0, int prm_1, int prm_2, int prm_3) {
         DeleteObject(hbkgtmp);
     }
     else {
-        myFillRect(hCDC, &rs, hBackGround[color4draw]);
+        myFillRectcc(hCDC, &rs, cBackGround[color4draw]);
     }
 }
 
@@ -3170,7 +3187,7 @@ void SetBGCL(){
     rs.top = 0;
     rs.right = 640;
     rs.bottom = 400;
-    myFillRect(hCDC, &rs, hBackGround[color4draw]);
+    myFillRectcc(hCDC, &rs, cBackGround[color4draw]);
 }
 
 
@@ -3226,7 +3243,7 @@ uint8 charattributefinal = 0;
 void DrawGrp() {
     charattribute = 0;
     if (ispc8801 == true) {
-        for (int cnt = 0; cnt < 8; cnt++) { DeleteObject(hBackGround[cnt + 64]); DeleteObject(hBackGround[cnt + 64 + 128]); DeleteObject(hBackGround[cnt + 72]); DeleteObject(hBackGround[cnt + 72 + 128]); hBackGround[cnt + 64] = CreateSolidBrush(RGB(((palette512_8bt[cnt][0] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][1] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][0] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 72] = CreateSolidBrush(RGB(((palette512_8bt[cnt][2] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][3] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][2] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 64 + 128] = CreateSolidBrush(RGB(0, ((((((palette512_8bt[cnt][0] >> 3) & 7) + ((palette512_8bt[cnt][1] >> 0) & 7) + ((palette512_8bt[cnt][0] >> 0) & 7)) / 3) + 1) * 28) + 3, 0)); hBackGround[cnt + 72 + 128] = CreateSolidBrush(RGB(0, ((((((palette512_8bt[cnt][2] >> 3) & 7) + ((palette512_8bt[cnt][3] >> 0) & 7) + ((palette512_8bt[cnt][2] >> 0) & 7)) / 3) + 1) * 28), 0)); }
+        for (int cnt = 0; cnt < 8; cnt++) { DeleteObject(hBackGround[cnt + 64]); DeleteObject(hBackGround[cnt + 64 + 128]); DeleteObject(hBackGround[cnt + 72]); DeleteObject(hBackGround[cnt + 72 + 128]); hBackGround[cnt + 64] = CreateSolidBrush(RGB(((palette512_8bt[cnt][0] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][1] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][0] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 72] = CreateSolidBrush(RGB(((palette512_8bt[cnt][2] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][3] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][2] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 64 + 128] = CreateSolidBrush(RGB(0, ((((((palette512_8bt[cnt][0] >> 3) & 7) + ((palette512_8bt[cnt][1] >> 0) & 7) + ((palette512_8bt[cnt][0] >> 0) & 7)) / 3) + 1) * 28) + 3, 0)); hBackGround[cnt + 72 + 128] = CreateSolidBrush(RGB(0, ((((((palette512_8bt[cnt][2] >> 3) & 7) + ((palette512_8bt[cnt][3] >> 0) & 7) + ((palette512_8bt[cnt][2] >> 0) & 7)) / 3) + 1) * 28), 0)); cBackGround[cnt + 64] = GetBrushColor(hBackGround[cnt + 64]); cBackGround[cnt + 72] = GetBrushColor(hBackGround[cnt + 72]); cBackGround[cnt + 64 + 128] = GetBrushColor(hBackGround[cnt + 64 + 128]); cBackGround[cnt + 72 + 128] = GetBrushColor(hBackGround[cnt + 72 + 128]); }
         for (int cnt = 0; cnt < 256; cnt++) {
             palette32[cnt] = GetBrushColor(hBackGround[cnt]);
         }
@@ -3991,6 +4008,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    }
    for (int cnt = 0; cnt < 256; cnt++) {
        palette32[cnt] = GetBrushColor(hBackGround[cnt]);
+       cBackGround[cnt] = GetBrushColor(hBackGround[cnt]);
    }
 
    hOldCBitmap = (HBITMAP)SelectObject(hCDC, hCBitmap);
@@ -4222,6 +4240,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 else {
                     fddriveload(3, FileNameoffd);
                 }
+                break;
+            case ID_32789:
+                isfullspeedenabled = (isfullspeedenabled) ? false : true;
+                CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | (isfullspeedenabled ? MF_CHECKED : MF_UNCHECKED));
                 break;
             default:
                 return DefWindowProc(hWnd, message, wParam, lParam);
