@@ -526,7 +526,7 @@ uint8 ioporte6h = 0;
 
 bool drawgrpbool = false;
 
-uint8 pc8001kmp[256] = { 255,255,255,255,255,255,255,255,131,160,255,255,255,23,255,255,134,135,132,255,255,255,255,255,255,255,255,151,255,133,255,255,150,255,255,144,128,130,129,130,129,255,255,255,255,255,22,255,96,97,98,99,100,101,102,103,112,113,255,255,255,255,255,255,255,33,34,35,36,37,38,39,48,49,50,51,52,53,54,55,64,65,66,67,68,69,70,71,80,81,82,255,255,132,255,255,0,1,2,3,4,5,6,7,16,17,18,19,20,21,22,20,145,146,147,148,149,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,114,115,116,87,117,118,32,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,83,84,85,86,255,255,255,119,255,255,133,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255 };
+uint8 pc8001kmp[256] = { 255,255,255,255,255,255,255,255,131,160,255,255,255,23,255,255,134,135,132,255,255,255,255,255,255,255,255,151,255,133,255,255,150,177,176,144,128,130,129,130,129,255,255,255,255,198,199,255,96,97,98,99,100,101,102,103,112,113,255,255,255,255,255,255,255,33,34,35,36,37,38,39,48,49,50,51,52,53,54,55,64,65,66,67,68,69,70,71,80,81,82,255,255,132,255,255,0,1,2,3,4,5,6,7,16,17,18,19,20,21,22,20,145,146,147,148,149,192,193,194,195,196,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,114,115,116,87,117,118,32,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,83,84,85,86,255,255,255,119,255,255,133,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255 };
 int timexforch1tm_year4ml = 0;
 
 int tofs = 0;
@@ -3139,15 +3139,40 @@ void SetBox2(int prm_0, int prm_1, int prm_2, int prm_3) {
     }
 }
 
+void SetBlank4rev(int prm_0, int prm_1) {
+    xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 200 : 250;
+    //xsiz10times = pc8001widthflag ? 10 : 20; ysiz10times = grpheight25 ? 24 : 30;
+    //xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 213 : 267;
+    //xsiz10times = 10; ysiz10times = 10;
+    rs.left = (((prm_0 + 0) * xsiz10times) / 100);
+    //rs.top = (((prm_1 + 0) * ysiz10times) / 100);
+    rs.top = (((((prm_1 & 0xfffffff8) + 0) * ysiz10times) + (((prm_1 & 7) + 1) * 200)) / 100);
+    rs.right = (((prm_0 + 1) * xsiz10times) / 100);
+    rs.bottom = (((prm_1 + 1) * ysiz10times) / 100);
+    if (chkedbb8 >= 1) {
+        DWORD basecolor1 = GetPixel(hCDC, rs.left, rs.top);
+        DWORD basecolor2 = GetBrushColor(hBackGround[color4draw]);
+        if (basecolor1 == GetBrushColor(hBackGround[32 + bgcolor])) { basecolor1 = basecolor2; }
+        HBRUSH hbkgtmp = CreateSolidBrush((((((basecolor1 >> (8 * 0)) & 0xFF) + ((((basecolor1 >> (8 * 0)) & 0xFF) - ((basecolor2 >> (8 * 0)) & 0xFF)) / 2)) & 0xFF) << (8 * 0)) | (((((basecolor1 >> (8 * 1)) & 0xFF) + ((((basecolor1 >> (8 * 1)) & 0xFF) - ((basecolor2 >> (8 * 1)) & 0xFF)) / 2)) & 0xFF) << (8 * 1)) | (((((basecolor1 >> (8 * 2)) & 0xFF) + ((((basecolor1 >> (8 * 2)) & 0xFF) - ((basecolor2 >> (8 * 2)) & 0xFF)) / 2)) & 0xFF) << (8 * 2)));
+        myFillRect(hCDC, &rs, hbkgtmp);
+        DeleteObject(hbkgtmp);
+    }
+    else {
+        myFillRectcc(hCDC, &rs, cBackGround[color4draw]);
+    }
+}
+
 void SetPset(int prm_0, int prm_1) {
     xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 200 : 250;
     //xsiz10times = pc8001widthflag ? 10 : 20; ysiz10times = grpheight25 ? 24 : 30;
     //xsiz10times = pc8001widthflag ? 100 : 200; ysiz10times = grpheight25 ? 213 : 267;
     //xsiz10times = 10; ysiz10times = 10;
     rs.left = (((prm_0 + 0) * xsiz10times) / 100);
-    rs.top = (((prm_1 + 0) * ysiz10times) / 100);
+    //rs.top = (((prm_1 + 0) * ysiz10times) / 100);
+    rs.top = (((((prm_1 & 0xfffffff8) + 0) * ysiz10times) + ((prm_1 & 7) * 200)) / 100);
     rs.right = (((prm_0 + 1) * xsiz10times) / 100);
-    rs.bottom = (((prm_1 + 1) * ysiz10times) / 100);
+    //rs.bottom = (((prm_1 + 1) * ysiz10times) / 100);
+    rs.bottom = (((((prm_1 & 0xfffffff8) + 0) * ysiz10times) + (((prm_1 & 7) + 1) * 200)) / 100);
     if (chkedbb8 >= 1) {
         DWORD basecolor1 = GetPixel(hCDC, rs.left, rs.top);
         DWORD basecolor2 = GetBrushColor(hBackGround[color4draw]);
@@ -3197,7 +3222,7 @@ void DrawFont_(int prm_0, int prm_1, int prm_2, bool prm_3) {
             if ((((isenabledpcg ? ((prm_2 < 128) ? fontrom[prm_2 * 8 + fonty] : pcgcharram[(prm_2 * 8 + fonty) - 0x400]) : fontrom[prm_2 * 8 + fonty]) << fontx) & 128) ^ (prm_3 ? 128 : 0)) { SetPset(prm_0 + fontx, prm_1 + fonty); }
         }
     }
-
+    if (prm_3 == true && grpheight25 == false) { for (int cnt = 0; cnt < 8; cnt++) { SetBlank4rev(prm_0 + cnt, prm_1 + 7); } }
 }
 void DrawFont(int prm_0, int prm_1, int prm_2) {
     for (int fonty = 0; fonty < 8; fonty++) {
@@ -3831,6 +3856,13 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
         fread(kanjirom2, 0x20000, 1, fontfile);
         fclose(fontfile);
     }
+    if (ispc8801 == true) {
+        pc8001kmp[37] = 162;
+        pc8001kmp[40] = 161;
+        pc8001kmp[91] = 0xd2;
+        pc8001kmp[109] = 0xa5;
+        pc8001kmp[111] = 0xa6;
+    }
 
     time_t timer = time(NULL);
     timexforch1 = localtime(&timer);
@@ -4095,7 +4127,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             ResetEmu();
             return 0;
         }
-		if (wParam == 37 || wParam == 40) {
+		if ((wParam == 37 || wParam == 40) && ispc8801 == false) {
 			pc8001kb1p = pc8001kmp[16];
 			if (pc8001kb1p != 255) { pc8001keybool[(pc8001kb1p >> 4) & 0xF] |= 1 << (pc8001kb1p & 0xF); }
 		}
@@ -4103,7 +4135,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         if (pc8001kb1p!=255){ pc8001keybool[(pc8001kb1p >> 4) & 0xF] |= 1 << (pc8001kb1p & 0xF); }
         break;
     case WM_KEYUP:
-		if (wParam == 37 || wParam == 40) {
+		if ((wParam == 37 || wParam == 40) && ispc8801 == false) {
 			pc8001kb1p = pc8001kmp[16];
 			if (pc8001kb1p != 255) { pc8001keybool[(pc8001kb1p >> 4) & 0xF] &= ~(1 << (pc8001kb1p & 0xF)); }
 		}
