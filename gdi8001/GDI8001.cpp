@@ -1620,6 +1620,8 @@ typedef struct fddcontract4rw {
     bool diskaccessing;
 };
 
+UINT32 fddseekptr[256][164][4];
+
 fddcontract4rw fdd[4];
 
 i8272a GN8012_i8272;
@@ -1635,7 +1637,14 @@ int fddriveclose(int prm_0) {
     GN8012_i8272.Diskstat[(prm_0 & 3)].diskinserted = false;
     GN8012_i8272.Diskstat[(prm_0 & 3)].motoractive = false;
     if (fdd[(prm_0) & 3].datafile == 0) { return 0; }
-    return fclose(fdd[(prm_0) & 3].datafile);
+    int rettmp = fclose(fdd[(prm_0) & 3].datafile);
+    fdd[(prm_0) & 3].datafile = 0;
+    for (int cnt2 = 0; cnt2 < 164; cnt2++) {
+        for (int cnt3 = 0; cnt3 < 256; cnt3++) {
+            fddseekptr[cnt3][cnt2][(prm_0) & 3] = -1;
+        }
+    }
+    return rettmp;
 }
 void fddriveload(int prm_0,const char* prm_1) {
     if (fdd[(prm_0) & 3].datafile != 0) { fddriveclose(prm_0); }
@@ -1654,6 +1663,20 @@ void fddriveload(int prm_0,const char* prm_1) {
     GN8012_i8272.Diskstat[(prm_0 & 3)].motoractive = true;
     fseek(fdd[(prm_0) & 3].datafile, 0, SEEK_SET);
     fread(&(fdd[(prm_0) & 3].flpimgheader), sizeof(fdd[(prm_0) & 3].flpimgheader), 1, fdd[(prm_0) & 3].datafile);
+    for (int cnt2 = 0; cnt2 < 164; cnt2++) {
+        if (fdd[(prm_0) & 3].flpimgheader.trackoffs[cnt2] != 0) {
+            fseek(fdd[(prm_0) & 3].datafile, fdd[(prm_0) & 3].flpimgheader.trackoffs[cnt2], SEEK_SET);
+            fread(&(fdd[(prm_0) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_0) & 3].datafile);
+            if (fdd[(prm_0) & 3].flpimgheader.trackoffs[cnt2] != 0) {
+                for (int cnt = 0; cnt < fdd[(prm_0) & 3].flpimgsecheadertmp.sectorspertrack * ((fdd[(prm_0) & 3].flpimgsecheadertmp.dimensity == 0x00) ? 2 : ((fdd[(prm_0) & 3].flpimgsecheadertmp.dimensity == 0x40) ? 1 : ((fdd[(prm_0) & 3].flpimgsecheadertmp.dimensity == 0x01) ? 1 : 4))); cnt++) {
+                    fdd[(prm_0) & 3].pointerofsecheader = fdd[(prm_0) & 3].flpimgheader.trackoffs[cnt2] + (cnt * ((128 << fdd[(prm_0) & 3].flpimgsecheadertmp.sectorsize) + 0x10));
+                    fseek(fdd[(prm_0) & 3].datafile, fdd[(prm_0) & 3].pointerofsecheader, SEEK_SET);
+                    fread(&(fdd[(prm_0) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_0) & 3].datafile);
+                    fddseekptr[fdd[(prm_0) & 3].flpimgsecheadertmp.sector][(fdd[(prm_0) & 3].flpimgsecheadertmp.cylinder << 1) | (fdd[(prm_0) & 3].flpimgsecheadertmp.headerside ? 1 : 0)][(prm_0) & 3] = fdd[(prm_0) & 3].pointerofsecheader;
+                }
+            }
+        }
+    }
     GN8012_i8272.Diskstat[(prm_0 & 3)].isprotected = (fdd[(prm_0) & 3].flpimgheader.writeprotect == 0x10) ? true : false;
     return;
 }
@@ -1665,24 +1688,36 @@ int fddrivebus(int prm_0, int prm_1, int prm_2, int prm_3, int prm_4) {
     fdd[(prm_4 >> 8) & 3].diskaccessing = true;
     
     if (!(fdd[(prm_4 >> 8) & 3].track == prm_3 && fdd[(prm_4 >> 8) & 3].sector == prm_2 && fdd[(prm_4 >> 8) & 3].headerside == ((prm_4 & 0x400) ? true : false))) {
+#if 0
         for (int cnt2 = 0; cnt2 < 164; cnt2++) {
-            if (fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[cnt2] == 0) { break; }
-            fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[cnt2], SEEK_SET);
-            fread(&(fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_4 >> 8) & 3].datafile);
             if (fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[cnt2] != 0) {
-                for (int cnt = 0; cnt < fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorspertrack * ((fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.dimensity == 0x00) ? 2 : ((fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.dimensity == 0x40) ? 1 : ((fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.dimensity == 0x01) ? 1 : 4))); cnt++) {
-                    fdd[(prm_4 >> 8) & 3].pointerofsecheader = fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[cnt2] + (cnt * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10));
-                    fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].pointerofsecheader, SEEK_SET);
-                    fread(&(fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_4 >> 8) & 3].datafile);
-                    if ((fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sector - 0) == prm_2 && fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.headerside == ((prm_4 & 0x400) ? 1 : 0)) { sectortmp = cnt; break; }
+                fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[cnt2], SEEK_SET);
+                fread(&(fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_4 >> 8) & 3].datafile);
+                if (fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[cnt2] != 0) {
+                    for (int cnt = 0; cnt < fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorspertrack * ((fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.dimensity == 0x00) ? 2 : ((fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.dimensity == 0x40) ? 1 : ((fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.dimensity == 0x01) ? 1 : 4))); cnt++) {
+                        fdd[(prm_4 >> 8) & 3].pointerofsecheader = fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[cnt2] + (cnt * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10));
+                        fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].pointerofsecheader, SEEK_SET);
+                        fread(&(fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_4 >> 8) & 3].datafile);
+                        if ((fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sector - 0) == prm_2 && fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.headerside == ((prm_4 & 0x400) ? 1 : 0)) { sectortmp = cnt; break; }
+                    }
+                    if ((cnt2 / 2) == prm_3 && sectortmp != -1) {
+                        fdd[(prm_4 >> 8) & 3].sectortmpl = sectortmp;
+                        fdd[(prm_4 >> 8) & 3].sectortmpl2 = cnt2;
+                        break;
+                    }
+                    sectortmp = -1;
                 }
-                if ((cnt2 / 2) == prm_3 && sectortmp != -1) {
-                    fdd[(prm_4 >> 8) & 3].sectortmpl = sectortmp;
-                    fdd[(prm_4 >> 8) & 3].sectortmpl2 = cnt2;
-                    break;
-                }
-                sectortmp = -1;
+                if (sectortmp != -1) { break; }
             }
+        }
+#endif
+        sectortmp = fddseekptr[prm_2][(prm_3 << 1) | ((prm_4 & 0x400) ? 1 : 0)][(prm_4 >> 8) & 3];
+        fdd[(prm_4 >> 8) & 3].sectortmpl = -1;
+        if (sectortmp != -1) {
+            fdd[(prm_4 >> 8) & 3].pointerofsecheader = sectortmp;
+            fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].pointerofsecheader, SEEK_SET);
+            fread(&(fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_4 >> 8) & 3].datafile);
+            fdd[(prm_4 >> 8) & 3].sectortmpl = 0;
         }
         if (sectortmp == -1) {
             if ((prm_4 & 3) == 0) {
@@ -1723,6 +1758,7 @@ int fddrivebus(int prm_0, int prm_1, int prm_2, int prm_3, int prm_4) {
                 d88contenttmp.sectordatasz = (256);
                 fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[(prm_3 * 2) + ((prm_4 & 0x400) ? 1 : 0)] + ((256 + 0x10) * (prm_2 - 1)), SEEK_SET);
                 fwrite(&d88contenttmp, 0x10, 1, fdd[(prm_4 >> 8) & 3].datafile);
+                fddseekptr[prm_2][(prm_3 << 1) | ((prm_4 & 0x400) ? 1 : 0)][(prm_4 >> 8) & 3] = fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[(prm_3 * 2) + ((prm_4 & 0x400) ? 1 : 0)] + ((256 + 0x10) * (prm_2 - 1));
                 for (int cnt = 0; cnt < 256; cnt++) {
                     fputc(0xff, fdd[(prm_4 >> 8) & 3].datafile);
                 }
@@ -1743,13 +1779,15 @@ int fddrivebus(int prm_0, int prm_1, int prm_2, int prm_3, int prm_4) {
         fdd[(prm_4 >> 8) & 3].track = prm_3;
         fdd[(prm_4 >> 8) & 3].sector = prm_2;
         fdd[(prm_4 >> 8) & 3].headerside = ((prm_4 & 0x400) ? true : false);
-        fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[fdd[(prm_4 >> 8) & 3].sectortmpl2] + (fdd[(prm_4 >> 8) & 3].sectortmpl * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)) + 0x10, SEEK_SET);
+        //fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[fdd[(prm_4 >> 8) & 3].sectortmpl2] + (fdd[(prm_4 >> 8) & 3].sectortmpl * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)) + 0x10, SEEK_SET);
+        fseek(fdd[(prm_4 >> 8) & 3].datafile, fddseekptr[prm_2][(prm_3 << 1) | ((prm_4 & 0x400) ? 1 : 0)][(prm_4 >> 8) & 3] + 0x10, SEEK_SET);
         fread(&readbuf4fddrivebus + (256 * ((prm_4 >> 8) & 3)), 256, 1, fdd[(prm_4 >> 8) & 3].datafile);
     }
     if (fdd[(prm_4 >> 8) & 3].sectortmpl == -1) { return 0xff; }
     switch (prm_4 & 3) {
     case 0:
-        fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[fdd[(prm_4 >> 8) & 3].sectortmpl2] + (fdd[(prm_4 >> 8) & 3].sectortmpl * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)) + 0x10 + prm_0, SEEK_SET);
+        //fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[fdd[(prm_4 >> 8) & 3].sectortmpl2] + (fdd[(prm_4 >> 8) & 3].sectortmpl * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)) + 0x10 + prm_0, SEEK_SET);
+        fseek(fdd[(prm_4 >> 8) & 3].datafile, fddseekptr[prm_2][(prm_3 << 1) | ((prm_4 & 0x400) ? 1 : 0)][(prm_4 >> 8) & 3] + 0x10 + prm_0, SEEK_SET);
         fputc(prm_1, fdd[(prm_4 >> 8) & 3].datafile);
         readbuf4fddrivebus[(prm_0 & 0xFF) + (256 * ((prm_4 >> 8) & 3))] = prm_1 & 0xFF;
         break;
@@ -3678,6 +3716,13 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
+    for (int cnt = 0; cnt < 4; cnt++) {
+        for (int cnt2 = 0; cnt2 < 164; cnt2++) {
+            for (int cnt3 = 0; cnt3 < 256; cnt3++) {
+                fddseekptr[cnt3][cnt2][cnt] = -1;
+            }
+        }
+    }
 
     for (int cnt = 0; cnt < 25; cnt++) { colorbool[cnt] = 0xff; }
     bsmode = 0xc0;
