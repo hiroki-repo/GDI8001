@@ -1,5 +1,5 @@
 # GDI8001
-is a PC-8001 Emulator which rends graphic GDI only!
+is a PC-8001/PC-8801 Emulator which rends graphic GDI only!
 
 # How to Use
 1, Download the repository!
