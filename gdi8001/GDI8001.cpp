@@ -3823,6 +3823,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
         fclose(biosfile);
         fddconnected = true;
         isloadedfddcfirmware = true;
+        crtc2 = 0xd2;
+        bsmode = 0xeb;
     }
     else {
         biosfile = fopen("n88basic.rom", "rb");
