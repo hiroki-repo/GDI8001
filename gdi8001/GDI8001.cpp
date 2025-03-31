@@ -3921,10 +3921,25 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
         fread(fontrom, 0x800, 1, fontfile);
         fclose(fontfile);
     }
+    else {
+        fontfile = fopen("kfont1.rom", "rb");
+        if (fontfile != 0) {
+            fseek(fontfile, 0x1000, SEEK_CUR);
+            fread(fontrom, 0x800, 1, fontfile);
+            fclose(fontfile);
+        }
+    }
     fontfile = fopen("kfont1.rom", "rb");
     if (fontfile != 0) {
         fread(kanjirom1, 0x20000, 1, fontfile);
         fclose(fontfile);
+    }
+    else {
+        fontfile = fopen("font.rom", "rb");
+        if (fontfile != 0) {
+            fread(&(kanjirom1[0x1000]), 0x800, 1, fontfile);
+            fclose(fontfile);
+        }
     }
     fontfile = fopen("kfont2.rom", "rb");
     if (fontfile != 0) {
