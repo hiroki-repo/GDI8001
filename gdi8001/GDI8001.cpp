@@ -619,6 +619,7 @@ bool serialstat = true;
 bool serialstatw = true;
 
 HANDLE cmtfileloc = 0;
+HANDLE ttyfileloc = 0;
 
 UINT8 linecharnum = 0;
 UINT8 upd3301intm = 0;
@@ -631,7 +632,7 @@ void __stdcall serialdaemonx(void* prm_0) {
     while (true) {
         if (ttyconnected == true) {
             if (serialstatw == false) {
-                WriteFile(cmtfileloc, &serialcharw, 1, 0, 0);
+                WriteFile(ttyfileloc, &serialcharw, 1, 0, 0);
                 serialstatw = true;
             }
         }
@@ -1969,6 +1970,15 @@ int fddcz80memaccess(int prm_0, int prm_1, int prm_2) {
     return 0xff;
 }
 
+void updatebaudrate() {
+    if (ttyconnected == true) {
+        DCB dcbtmp;
+        GetCommState(ttyfileloc, &dcbtmp);
+        dcbtmp.BaudRate = (((((uPD8251config[2] & 3) == 3) ? 1875 : (((uPD8251config[2] & 3) == 2) ? 7500 : 30000)) / 100) << rs232crate);
+        SetCommState(ttyfileloc, &dcbtmp);
+    }
+}
+
 int z80memaccess(int prm_0, int prm_1, int prm_2) {
     switch (prm_2){
     case 0:
@@ -2062,11 +2072,21 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x2A:
         case 0x2C:
         case 0x2E:
+            if (cmtbinsnd & 2) {
+                if (ttyconnected == true) {
+                    if (ttyfileloc != 0) { serialcharw[0] = prm_1; WriteFile(ttyfileloc, &serialcharw, 1, 0, 0); }
+                }
+            }
+            else {
+                cmtfile = fopen(FileName, "ab"); if (cmtfile != 0) { fputc(prm_1, cmtfile); fclose(cmtfile); }
+            }
+#if 0
             if (ttyconnected == false) {
                 cmtfile = fopen(FileName, "ab"); if (cmtfile != 0) { fputc(prm_1, cmtfile); fclose(cmtfile); }
             }
-            else { if (cmtfileloc != 0) { serialcharw[0] = prm_1; WriteFile(cmtfileloc, &serialcharw, 1, 0, 0); } }
+            else { if (ttyfileloc != 0) { serialcharw[0] = prm_1; WriteFile(ttyfileloc, &serialcharw, 1, 0, 0); } }
             //if (uPD8251config[3] & 1) { cmtfile = fopen(FileName, "ab"); if (cmtfile != 0) { fputc(prm_1, cmtfile); fclose(cmtfile); } }
+#endif
             break;
         case 0x21:
         case 0x23:
@@ -2328,6 +2348,7 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             break;
         case 0x6F:
             rs232crate = prm_1 & 0xF;
+            updatebaudrate();
             break;
         case 0x70:
             textwindoffsetadru8 = prm_1;
@@ -2410,11 +2431,22 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
         case 0x2C:
         case 0x2E:
             //MessageBoxA(0, "A", "A", 0);
+#if 0
             if (ttyconnected == false) {
                 if (cmtreseted == true) { cmtreseted = false; cmtseek = 0; return 0xff; }
                 else { cmtfile = fopen(FileName, "rb"); if (cmtfile != 0) { struct _stat buf; int result = _stat(FileName, &buf); if (buf.st_size <= cmtseek) { cmtseek = 0; fclose(cmtfile); return 0xFF; } fseek(cmtfile, cmtseek++, SEEK_SET); ret = fgetc(cmtfile); fclose(cmtfile); return ret; } else { return 0xff; } }
             }
             else { while (true) { if (serialstat == true) { break; } } serialstat = false; if (rxdataready == false) { return 0xff; } else { ret = serialchar[0]; rxdataready = false; return ret; } }
+#endif
+            if (cmtbinsnd & 2) {
+                if (ttyconnected == true) {
+                    while (true) { if (serialstat == true) { break; } } serialstat = false; if (rxdataready == false) { return 0xff; } else { ret = serialchar[0]; rxdataready = false; return ret; }
+                }
+            }
+            else {
+                if (cmtreseted == true) { cmtreseted = false; cmtseek = 0; return 0xff; }
+                else { cmtfile = fopen(FileName, "rb"); if (cmtfile != 0) { struct _stat buf; int result = _stat(FileName, &buf); if (buf.st_size <= cmtseek) { cmtseek = 0; fclose(cmtfile); return 0xFF; } fseek(cmtfile, cmtseek++, SEEK_SET); ret = fgetc(cmtfile); fclose(cmtfile); return ret; } else { return 0xff; } }
+            }
             return 0xff;
             //if (uPD8251config[3] & 4) { if (cmtreseted == true) { cmtreseted = false; cmtseek = 0; return 0xff; } else { cmtfile = fopen(FileName, "rb"); if (cmtfile != 0) { fseek(cmtfile, cmtseek++, SEEK_SET); ret = fgetc(cmtfile); fclose(cmtfile); return ret; } } }
             return uPD8251config[2];
@@ -3040,7 +3072,7 @@ void RTIService(LPVOID* arg4rtisv) { while (true) { /*if (ioporte6h & 1) { Z80IN
 void __stdcall serialdaemon(void* prm_0) {
     COMSTAT tempcomstate;
     while (true) {
-        if (ttyconnected == true) { if (rxdataready == false) { if (cmtfileloc != 0) { ClearCommError(cmtfileloc, 0, &tempcomstate); if (tempcomstate.cbInQue != 0) { ReadFile(cmtfileloc, &serialchar, 1, 0, 0); rxdataready = true; if ((ioporte6h & 4) && ispc8801 == true) { Z80INT(0); } } } serialstat = true; } }
+        if (ttyconnected == true) { if (rxdataready == false) { if (ttyfileloc != 0) { ClearCommError(ttyfileloc, 0, &tempcomstate); if (tempcomstate.cbInQue != 0) { ReadFile(ttyfileloc, &serialchar, 1, 0, 0); rxdataready = true; if ((ioporte6h & 4) && ispc8801 == true) { Z80INT(0); } } } serialstat = true; } }
     }
 }
 
@@ -3365,7 +3397,7 @@ void DrawGrp() {
                 charattributefinal = charattribute;
             }
             else { charattributefinal = 0; }
-            if (fullgraphicdraw == true) {
+            if (fullgraphicdraw == true && chkedbb8 == 0) {
 
                 if (ispc8801 == true) {
                     for (int drawbacky = 0; drawbacky < ((grpheight25 || ((colorfullgraphicmode == true && hiresgrpresol200 == true) && ispc8801 == true)) ? 25 : 20); drawbacky++) {
@@ -4186,7 +4218,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_SYSKEYDOWN:
     case WM_KEYDOWN:
         if (wParam == 120) {
-            ttyconnected = false;
             cmtreseted = true;
             cmtdatard = true;
             serialstat = true;
@@ -4276,7 +4307,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | (is8mhz ? MF_CHECKED : MF_UNCHECKED));
                 break;
             case ID_32778:
-                ttyconnected = false;
                 cmtreseted = true;
                 cmtdatard = true;
                 serialstat = true;
@@ -4292,15 +4322,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
                 break;
             case ID_32779:
-                cmtreseted = true;
                 cmtdatard = true;
-                if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
-                cmtfileloc = CreateFileA("\\\\.\\COM1", GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-                memcpy(FileName, "\\\\.\\COM1", 9);
+                if (ttyfileloc != 0) { CloseHandle(ttyfileloc); }
+                ttyfileloc = CreateFileA("\\\\.\\COM1", GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
                 serialstat = false;
                 serialstatw = true;
                 ttyconnected = true;
                 rxdataready = false;
+                updatebaudrate();
                 break;
             case ID_32780:
                 ResetEmu();
