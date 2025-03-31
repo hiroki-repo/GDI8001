@@ -3807,7 +3807,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
     for (int cnt = 0; cnt < 16; cnt++) { memset(erom[cnt % 4][cnt / 4], 0xff, 0x2000); }
 
 
-    FILE* biosfile = fopen("n88basic.rom", "rb");
+    FILE* biosfile = fopen("pc88.rom", "rb");
     if (biosfile != 0) {
         ispc8801 = true;
         fread(n88rom, 0x8000, 1, biosfile);
@@ -3817,58 +3817,86 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
         fread(erom[0][1], 0x2000, 1, biosfile);
         fread(erom[0][2], 0x2000, 1, biosfile);
         fread(erom[0][3], 0x2000, 1, biosfile);
-        fseek(biosfile, 0x2000, SEEK_CUR);
+        fread(fddcrom, 0x800, 1, biosfile);
+        fseek(biosfile, 0x1800, SEEK_CUR);
         fread(bios, 0x6000, 1, biosfile);
         fclose(biosfile);
-        FILE* biosfile = fopen("n80basic.rom", "rb");
-        if (biosfile != 0) {
-            fread(bios, 0x6000, 1, biosfile);
-            fread(n80rom, 0x2000, 1, biosfile);
-            fclose(biosfile);
-            n80_8000 = true;
-        }
-        biosfile = fopen("n88_0.rom", "rb");
-        if (biosfile != 0) {
-            fread(erom[0][0], 0x2000, 1, biosfile);
-            fclose(biosfile);
-        }
-        biosfile = fopen("n88_1.rom", "rb");
-        if (biosfile != 0) {
-            fread(erom[0][1], 0x2000, 1, biosfile);
-            fclose(biosfile);
-        }
-        biosfile = fopen("n88_2.rom", "rb");
-        if (biosfile != 0) {
-            fread(erom[0][2], 0x2000, 1, biosfile);
-            fclose(biosfile);
-        }
-        biosfile = fopen("n88_3.rom", "rb");
-        if (biosfile != 0) {
-            fread(erom[0][3], 0x2000, 1, biosfile);
-            fclose(biosfile);
-        }
-        crtc2 = 0xd2;
-        bsmode = 0xeb;
+        fddconnected = true;
+        isloadedfddcfirmware = true;
     }
     else {
-        FILE* biosfile = fopen("nbasic.rom", "rb");
+        biosfile = fopen("n88basic.rom", "rb");
         if (biosfile != 0) {
-            fread(bios, 0x6000, 1, biosfile);
+            ispc8801 = true;
+            fread(n88rom, 0x8000, 1, biosfile);
             fread(n80rom, 0x2000, 1, biosfile);
+            fseek(biosfile, 0x2000, SEEK_CUR);
+            fread(erom[0][0], 0x2000, 1, biosfile);
+            fread(erom[0][1], 0x2000, 1, biosfile);
+            fread(erom[0][2], 0x2000, 1, biosfile);
+            fread(erom[0][3], 0x2000, 1, biosfile);
+            fseek(biosfile, 0x2000, SEEK_CUR);
+            fread(bios, 0x6000, 1, biosfile);
             fclose(biosfile);
-            FILE* biosfile = fopen("n80.rom", "rb");
-            if (biosfile != 0) {
-                fread(n80rom, 0x2000, 1, biosfile);
-                fclose(biosfile);
-            }
-            else { n80_8000 = true; }
-        }
-        else {
             FILE* biosfile = fopen("n80basic.rom", "rb");
             if (biosfile != 0) {
                 fread(bios, 0x6000, 1, biosfile);
+                fread(n80rom, 0x2000, 1, biosfile);
+                fclose(biosfile);
+                n80_8000 = true;
+            }
+            biosfile = fopen("n88_0.rom", "rb");
+            if (biosfile != 0) {
+                fread(erom[0][0], 0x2000, 1, biosfile);
                 fclose(biosfile);
             }
+            biosfile = fopen("n88_1.rom", "rb");
+            if (biosfile != 0) {
+                fread(erom[0][1], 0x2000, 1, biosfile);
+                fclose(biosfile);
+            }
+            biosfile = fopen("n88_2.rom", "rb");
+            if (biosfile != 0) {
+                fread(erom[0][2], 0x2000, 1, biosfile);
+                fclose(biosfile);
+            }
+            biosfile = fopen("n88_3.rom", "rb");
+            if (biosfile != 0) {
+                fread(erom[0][3], 0x2000, 1, biosfile);
+                fclose(biosfile);
+            }
+            crtc2 = 0xd2;
+            bsmode = 0xeb;
+        }
+        else {
+            FILE* biosfile = fopen("nbasic.rom", "rb");
+            if (biosfile != 0) {
+                fread(bios, 0x6000, 1, biosfile);
+                fread(n80rom, 0x2000, 1, biosfile);
+                fclose(biosfile);
+                FILE* biosfile = fopen("n80.rom", "rb");
+                if (biosfile != 0) {
+                    fread(n80rom, 0x2000, 1, biosfile);
+                    fclose(biosfile);
+                }
+                else { n80_8000 = true; }
+            }
+            else {
+                FILE* biosfile = fopen("n80basic.rom", "rb");
+                if (biosfile != 0) {
+                    fread(bios, 0x6000, 1, biosfile);
+                    fclose(biosfile);
+                }
+            }
+        }
+    }
+    for (int cnt = 0; cnt < 28; cnt++) {
+        char fnameofoprom[256];
+        sprintf(fnameofoprom, "n88oprom_%d_%d.rom\0", ((cnt + 4) % 8), ((cnt + 4) / 8));
+        biosfile = fopen(fnameofoprom, "rb");
+        if (biosfile != 0) {
+            fread(erom[((cnt + 4) % 8)][((cnt + 4) / 8)], 0x2000, 1, biosfile);
+            fclose(biosfile);
         }
     }
     biosfile = fopen("dict.rom", "rb");
