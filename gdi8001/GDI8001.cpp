@@ -3806,6 +3806,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
 
     for (int cnt = 0; cnt < 16; cnt++) { memset(erom[cnt % 4][cnt / 4], 0xff, 0x2000); }
 
+    isloadedfddcfirmware = false;
+    fddconnected = true;
 
     FILE* biosfile = fopen("pc88.rom", "rb");
     if (biosfile != 0) {
@@ -3906,8 +3908,6 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
         fread(dicrom, 0x80000, 1, biosfile);
         fclose(biosfile);
     }
-    isloadedfddcfirmware = false;
-    fddconnected = true;
     FILE* fddbiosfile = fopen("n80s31.rom", "rb");
     if (fddbiosfile != 0) {
         fread(fddcrom, 0x800, 1, fddbiosfile);
