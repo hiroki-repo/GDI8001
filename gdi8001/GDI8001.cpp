@@ -3892,10 +3892,10 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
     }
     for (int cnt = 0; cnt < 28; cnt++) {
         char fnameofoprom[256];
-        sprintf(fnameofoprom, "n88oprom_%d_%d.rom\0", ((cnt + 4) % 8), ((cnt + 4) / 8));
+        sprintf(fnameofoprom, "n88oprom_%d_%d.rom\0", ((cnt + 4) / 4), ((cnt + 4) % 4));
         biosfile = fopen(fnameofoprom, "rb");
         if (biosfile != 0) {
-            fread(erom[((cnt + 4) % 8)][((cnt + 4) / 8)], 0x2000, 1, biosfile);
+            fread(erom[((cnt + 4) / 4)][((cnt + 4) % 4)], 0x2000, 1, biosfile);
             fclose(biosfile);
         }
     }
