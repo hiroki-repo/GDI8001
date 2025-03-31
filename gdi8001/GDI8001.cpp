@@ -1974,7 +1974,7 @@ void updatebaudrate() {
     if (ttyconnected == true) {
         DCB dcbtmp;
         GetCommState(ttyfileloc, &dcbtmp);
-        dcbtmp.BaudRate = (((((uPD8251config[2] & 3) == 3) ? 1875 : (((uPD8251config[2] & 3) == 2) ? 7500 : 30000)) / 100) << rs232crate);
+        dcbtmp.BaudRate = (((((uPD8251config[2] & 3) == 3) ? 1875 : (((uPD8251config[2] & 3) == 2) ? 7500 : 30000)) << rs232crate) / 100);
         SetCommState(ttyfileloc, &dcbtmp);
     }
 }
