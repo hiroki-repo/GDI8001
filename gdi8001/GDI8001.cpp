@@ -1,4 +1,6 @@
-﻿// GDI8001.cpp : アプリケーションのエントリ ポイントを定義します。
+﻿// GDI8001.cpp : GDI8001 main code
+// (c) 2022-2025 Gocaine Project
+// This source code was made for PC-8001/PC-8801 emulation test in C Language and Win32 API and based on Gocaine N80 which written in HSP3.
 //
 
 #pragma warning(disable : 4996)
