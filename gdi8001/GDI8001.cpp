@@ -3814,6 +3814,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
     HANDLE handleofpluginlister;
     typedef void typeoftheinitplugin(void*);
     void (*initplugin)(void*);
+    char FileName4Plugin[512];
     handleofpluginlister = FindFirstFileA("plugins\\*.dll",&pluginlister);
     if (handleofpluginlister != INVALID_HANDLE_VALUE) {
         for (int cnt = 0; cnt < 1024; cnt++) {
@@ -3821,21 +3822,29 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
             pluginctx[cnt].Z80INT = Z80INT;
             pluginctx[cnt].version = 0x00000001;
             if ((pluginlister.dwFileAttributes & 0x10) == 0) {
-                HMODULE handleofplugindll = LoadLibraryA(pluginlister.cFileName);
+                sprintf(FileName4Plugin,"plugins\\%s", (LPCSTR)(&((&pluginlister)->cFileName)));
+                HMODULE handleofplugindll = LoadLibraryA((LPCSTR)(&FileName4Plugin));
                 if (handleofplugindll == 0) {
-                    pluginctx[cnt].isexecutedontheemulator = true;
-                    handleofplugindll = (HMODULE)x86_LoadLibraryA(pluginlister.cFileName);
-                    initplugin = (typeoftheinitplugin*)x86_GetProcAddress((DWORD)handleofplugindll, "InitPlugin");
-                    EmuExecute((DWORD)&initplugin, 1, &pluginctx[cnt]);
+                    if (x86_LoadLibraryA != 0) {
+                        pluginctx[cnt].isexecutedontheemulator = true;
+                        handleofplugindll = (HMODULE)x86_LoadLibraryA((LPCSTR)(&FileName4Plugin));
+                        initplugin = (typeoftheinitplugin*)x86_GetProcAddress((DWORD)handleofplugindll, "InitPlugin");
+                        if (initplugin != 0) {
+                            EmuExecute((DWORD)&initplugin, 1, &pluginctx[cnt]);
+                        }
+                    }
                 }
                 else {
                     pluginctx[cnt].isexecutedontheemulator = false;
                     initplugin = (typeoftheinitplugin*)GetProcAddress(handleofplugindll, "InitPlugin");
-                    initplugin(&pluginctx[cnt]);
+                    if (initplugin != 0) {
+                        initplugin(&pluginctx[cnt]);
+                    }
                 }
             }
             if (FindNextFileA(handleofpluginlister, &pluginlister) == false) { break; }
         }
+        FindClose(handleofpluginlister);
     }
 
     for (int cnt = 0; cnt < 16; cnt++) { memset(erom[cnt % 4][cnt / 4], 0xff, 0x2000); }
