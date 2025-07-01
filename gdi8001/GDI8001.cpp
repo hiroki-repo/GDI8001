@@ -3660,6 +3660,9 @@ void ResetEmu() {
     ispc8801mk2srormore = false;
     howmanybeepstopped = 0;
     howmanybeepstopped_2 = 0;
+
+    for (int cnt = 0; cnt < howmanypluginsloaded; cnt++) { for (int cnt4pluginctx = 0; cnt4pluginctx < 24; cnt4pluginctx++) { if ((pluginctx[cnt].ispluginloaded == true) && ((pluginctx[cnt].plugintype[cnt4pluginctx]) & 0x20000)) { if (pluginctx[cnt].isexecutedontheemulator == false) { pluginctx[cnt].uniquememaccess(0xdeadbeef, 0xcafebabe, 4); } else { EmuExecute((DWORD)&pluginctx[cnt].uniquememaccess, 3, 0xdeadbeef, 0xcafebabe, 4); } pluginctx[cnt].isvalidport = false; } } }
+
     for (int cnt = 0; cnt < 25; cnt++) { colorbool[cnt] = 0xff; }
 
     if (cmtfileloc != 0) { CloseHandle(cmtfileloc); }
