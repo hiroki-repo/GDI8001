@@ -1,52 +1,46 @@
 # GDI8001
-is a PC-8001/PC-8801 Emulator which rends graphic GDI only!
 
-# How to Use
-1, Download the repository!
+A PC-8001/PC-8801 emulator using Windows GDI for graphics.
 
-2, Extract the zip file that downloaded now!
+## Quick start
 
-3, Please put firmware files PC-8001 font as "font.rom" and PC-8001 BASIC as "n80basic.rom" to GDI8001-main folder! If you wanted to use PC-8001 mkII files please put the firmware 32k or 24k basic firmware as "nbasic.rom" and put the 8k firmware as "n80.rom" if using 24k mkII nbasic rom. If you using 32k mkII rom file, You haven't necessary to put "n80.rom" for the program folder! If you wanted to use PC-80s31(Floppy disk drive) emulation, Please put the PC-80s31 firmware as "n80s31.rom" for the program folder!
+1. Download and extract the repository ZIP.
+2. Choose the executable for your system, for example `amd64/GDI8001.exe` for 64-bit Windows.
+3. Put the ROM files below **beside that executable**, then start `GDI8001.exe` from the same folder. ROMs must be supplied separately.
 
-4, Run "GDI8001.exe"
+## ROM setup
 
-# How to Use as PC-8801 emulator
-1, Download the repository!
+Add `font.rom` (2 KiB character font) for your chosen machine, plus the BASIC ROM files below. Use a separate folder for each machine model.
 
-2, Extract the zip file that downloaded now!
+| Machine | BASIC ROM files |
+| --- | --- |
+| PC-8001 | `n80basic.rom` (24 KiB) |
+| PC-8001mkII, combined ROM | `nbasic.rom` (32 KiB) |
+| PC-8001mkII, split ROMs | `nbasic.rom` (24 KiB) **and** `n80.rom` (8 KiB) |
+| PC-8801, separate ROMs | `n88basic.rom` (32 KiB), `n80basic.rom` (24 KiB) and `n88_0.rom` (8 KiB extension ROM) |
 
-3, Please put firmware files PC-8801 font as "font.rom", 4TH Firmware as "N88_0.rom", PC-8801 N-88 BASIC as "n88basic.rom" and PC-8001 compatible BASIC as "n80basic.rom" to GDI8001-main folder! If you wanted to use low level Floppy disk drive emulation, Please put the PC-80s31 or PC-8801 fdd controller firmware as "n80s31.rom" for the program folder! If you wanted to use the Kanji rom, Please put the 1st level data rom as "kfont1.rom" and 2nd level data rom as "kfont2.rom"!
+For PC-8001mkII, choose **one** of the two layouts above; the 32 KiB file already contains the extra 8 KiB. The presence of `n88basic.rom` or a supported combined `pc88.rom` selects PC-8801 mode automatically.
 
-4, Run "GDI8001.exe"
+Optional ROMs go in the same folder:
 
-# How to read CMT Files
-1, Run GDI8001
+- `n80s31.rom` (2 KiB): PC-80S31 or PC-8801 floppy controller firmware for low-level disk emulation.
+- `kfont1.rom` and `kfont2.rom` (128 KiB each): level 1 and level 2 Kanji fonts.
+- `n88_1.rom` through `n88_3.rom` (8 KiB each): additional PC-8801 extension ROMs.
 
-2, Please push F9 Key!
+Example: PC-8001mkII with a 32 KiB BASIC ROM and floppy firmware:
 
-3, Please select the CMT File!
+```text
+amd64/
+  GDI8001.exe
+  font.rom
+  nbasic.rom
+  n80s31.rom
+```
 
-4, Please operate to read the tape in the emulator!
+## Controls
 
-# How to use the full screen mode
-1, Run GDI8001
+- **F9:** select a CMT tape image, then use the emulated machine's tape-loading command.
+- **F11:** reset the emulated machine.
+- **F12:** toggle full screen.
 
-2, Please push F12 Key!
-
-3, You'll get your GDI8001 fullscreen mode!
-
-# How to reset the GDI8001
-1, Please push F11 when you want to reset the GDI8001
-
-2, You'll get the first screen on the emulator!
-
-# Host computer minimum requirement
-
-CPU:Pentium 3 or more or ARMv7 or more
-
-GPU:The Graphics system only required ability of run the GDI only 3D Games at 60FPS so The GPU doesn't required!
-
-RAM: The emulator uses 2.1MB of the host memory
-
-OS:Windows vista or more and Wine on Unix compatibles or Android OS!
-
+The original builds target Windows Vista or later, or Wine on Unix-like systems/Android. Legacy builds are in `GDI8001(LegacyPC).7z`.
