@@ -402,6 +402,9 @@ HANDLE RTIThreadid = 0;
 HANDLE SERThreadid = 0;
 HANDLE SERWThreadid = 0;
 HANDLE FDDCZ80Threadid = 0;
+SRWLOCK cpulock = SRWLOCK_INIT;
+SRWLOCK fddcpulock = SRWLOCK_INIT;
+HANDLE FDDCWakeEvent = CreateEvent(0, FALSE, FALSE, 0);
 UINT32 clockcount = 0;
 int clockcountpc8012 = 0;
 bool videoenabled = false;
@@ -534,7 +537,15 @@ int timexforch1tm_year4ml = 0;
 int tofs = 0;
 
 void rtcstrobe() { switch (pch & 0xF) { case 1:timerforch123 = time(0) + tofs; timey = localtime(&timerforch123); rtctimeforminusck2[0] = timey->tm_sec; rtctimeforminusck2[1] = timey->tm_min; rtctimeforminusck2[2] = timey->tm_hour; rtctimeforminusck2[3] = timey->tm_mday; rtctimeforminusck2[4] = timey->tm_mon + 1; rtcpos = 0; rtctime[4] = rtctimeforminusck2[4] << 4; rtctime[3] = ((rtctimeforminusck2[3] / 10) << 4) + rtctimeforminusck2[3] % 10; rtctime[2] = ((rtctimeforminusck2[2] / 10) << 4) + rtctimeforminusck2[2] % 10; rtctime[1] = ((rtctimeforminusck2[1] / 10) << 4) + rtctimeforminusck2[1] % 10; rtctime[0] = ((rtctimeforminusck2[0] / 10) << 4) + rtctimeforminusck2[0] % 10; rtcdata = rtctime[0] & 0x01; break; case 2: for (int cnt = 0; cnt < 5; cnt++) { if (cnt != 4) { rtctime[cnt] = rtctimetmp[cnt]; } else { rtctime[cnt] = (rtctimetmp[cnt] - 1); } }for (int cnt = 0; cnt < 5; cnt++) { if (cnt != 4) { rtctimeforminus[cnt] = (((rtctime[cnt] >> 4) * 10) + (rtctime[cnt] & 15)); } else { rtctimeforminus[cnt] = (rtctime[cnt] >> 4); } } timezforch1.tm_sec = rtctimeforminus[0] % 60; timezforch1.tm_min = rtctimeforminus[1] % 60; timezforch1.tm_hour = rtctimeforminus[2] % 24; timezforch1.tm_mday = rtctimeforminus[3] % 32; timezforch1.tm_mon = ((rtctimeforminus[4] - 1) % 12) + 1; timezforch1.tm_year = 71; tofs = mktime(&timezforch1) - time(0); break; } }
-void rtcshift() { if (rtcpos < 40) { if ((pch >> 3 & 1)) { rtctimetmp[rtcpos >> 3] |= (pch >> 3 & 1) << (rtcpos & 7); } else { rtctimetmp[rtcpos >> 3] &= ~(1 << (rtcpos & 7)); }rtcpos += 1; rtcdata = (rtctime[rtcpos >> 3] >> (rtcpos & 7) & 1) ? true : false; }  }
+void rtcshift() {
+    if (rtcpos < 40) {
+        if ((pch >> 3 & 1)) { rtctimetmp[rtcpos >> 3] |= (pch >> 3 & 1) << (rtcpos & 7); }
+        else { rtctimetmp[rtcpos >> 3] &= ~(1 << (rtcpos & 7)); }
+        rtcpos += 1;
+        // After 40 clocks, the first shifted-in bit reaches the output.
+        rtcdata = ((rtcpos < 40 ? (rtctime[rtcpos >> 3] >> (rtcpos & 7)) : rtctimetmp[0]) & 1) != 0;
+    }
+}
 void prtstrobe() {if (prtenable && prtenable0 != 0 && pch != 13){}prtenable0 = prtenable;}
 
 bool cmtreseted = false;
@@ -865,7 +876,13 @@ public:
     };
     strct_Diskstat Diskstat[4];
 private:
+    bool is_drive_connected(int drive) {
+        // The disk unit has two drives even when no image is inserted.
+        return Diskstat[drive].fddphyaccess != fddphyaccessx && (drive < 2 || Diskstat[drive].diskinserted);
+    }
     void get_i8272_param() {
+        // Decode the sector length for the newly selected drive.
+        latestdisk = commandcode[1] & 3;
         Drive[commandcode[1] & 3].headsel = ((commandcode[1] & 4) ? true : false);
         Drive[commandcode[1] & 3].cylinder = commandcode[2];
         Drive[commandcode[1] & 3].heada = commandcode[3];
@@ -891,7 +908,6 @@ private:
             }
         }
         cylinderpcn = Drive[commandcode[1] & 3].cylinder;
-        latestdisk = (commandcode[1] & 3);
         Drive[latestdisk].diskpos = 0;
         i8272astatus |= (1 << (latestdisk));
         i8272astatus |= 0x10;
@@ -958,7 +974,7 @@ public:
             i8272astatus |= 0x80;
         }
         else {
-            if (iswaitedfortheexecevent == false) { return; }
+            if (iswaitedfortheexecevent == false) { Sleep(1); return; } // Yield while no FDC event is pending.
             iswaitedfortheexecevent = false;
             Sleep(waitedexeceventtime);
             waitedexeceventtime = 0;
@@ -1012,10 +1028,22 @@ public:
     }
     ~i8272a() {}
     void removefdd(int prm_0) { Diskstat[prm_0 & 3].diskinserted = false; Diskstat[prm_0 & 3].isprotected = false; Diskstat[prm_0 & 3].motoractive = false; Diskstat[prm_0 & 3].fddphyaccess = fddphyaccessx; return; }
-    bool is_int_pending() { if (isnodmamode == false) { isintpending = false; return false; } if (isintpending == true) { isintpending = false; return true; } return false; }
+    // Hold a result interrupt until the controller result is read.
+    bool is_int_pending() {
+        if (isnodmamode == false) {
+            isintpending = false;
+            return false;
+        }
+        if (isintpending == true) {
+            if (readwritephase || statussize == 0) { isintpending = false; }
+            return true;
+        }
+        return false;
+    }
     UINT8 getlatestdisk() { return latestdisk; }
     void i8272a_sendtc() {
-        if (readwritephase == true || statussize != 0 || (readwritephase == false && statussize == 7)) {
+        // TC ends execution; leave an existing result phase unchanged.
+        if (readwritephase == true) {
             set_i8272_status();
             commandpos = 0;
             readwritephase = false;
@@ -1282,7 +1310,8 @@ public:
                                 Drive[commandcode[1] & 3].cylinder = 0;
                                 cylinderpcn = Drive[commandcode[1] & 3].cylinder;
                                 latestdisk = (commandcode[1] & 3);
-                                Drive[commandcode[1] & 3].result = (latestdisk & 3) | (Diskstat[latestdisk & 3].diskinserted ? 0 : 0x48) | ((Diskstat[latestdisk & 3].fddphyaccess == fddphyaccessx) ? 0x48 : 0) | 0x20;
+                                Drive[commandcode[1] & 3].result =
+                                    (latestdisk & 3) | (is_drive_connected(latestdisk & 3) ? 0 : 0x48) | 0x20;
                                 isintpending = true;
                                 i8272astatus &= ~(1 << (latestdisk));
                                 break;
@@ -1383,7 +1412,8 @@ public:
                                 Drive[commandcode[1] & 3].cylinder = commandcode[2];
                                 cylinderpcn = Drive[commandcode[1] & 3].cylinder;
                                 latestdisk = (commandcode[1] & 3);
-                                Drive[commandcode[1] & 3].result = (latestdisk & 3) | (Diskstat[latestdisk & 3].diskinserted ? 0 : 0x48) | ((Diskstat[latestdisk & 3].fddphyaccess == fddphyaccessx) ? 0x48 : 0) | 0x20;
+                                Drive[commandcode[1] & 3].result =
+                                    (latestdisk & 3) | (is_drive_connected(latestdisk & 3) ? 0 : 0x48) | 0x20;
                                 isintpending = true;
                                 i8272astatus &= ~(1 << (latestdisk));
                                 break;
@@ -1490,6 +1520,23 @@ public:
                                 isintpending = true;
                                 break;
                             }
+                            // End a read/scan command if the requested sector cannot be found.
+                            if (readwritephase && ((commandcode[0] & 31) == 2 || (commandcode[0] & 31) == 6 ||
+                                                   (commandcode[0] & 31) == 12 || (commandcode[0] & 31) == 17 ||
+                                                   (commandcode[0] & 31) == 25 || (commandcode[0] & 31) == 29)) {
+                                int sectorstat = Diskstat[latestdisk].fddphyaccess(
+                                    0, 0, Drive[latestdisk].recorda, Drive[latestdisk].cylinder,
+                                    (Drive[latestdisk].headsel ? 0x400 : 0) | (latestdisk << 8) | 3);
+                                if (sectorstat & 12) {
+                                    set_i8272_status();
+                                    statcode[0] |= 0x40;
+                                    statcode[1] |= (sectorstat & 8) ? 1 : 4;
+                                    statcode[2] = 0;
+                                    commandpos = 0;
+                                    readwritephase = false;
+                                    isintpending = true;
+                                }
+                            }
                             if (statussize > 0) {
                                 statuspos = statussize - 1;
                             }
@@ -1568,6 +1615,7 @@ public:
                             return 0xff;
                         }
                         else {
+                            if ((commandcode[0] & 31) != 8) { isintpending = false; }
                             i8272retstat = statcode[(statussize - 1) - statuspos];
                             if (statuspos > 0) { statuspos--; i8272astatus |= 0x80; }
                             else if (statuspos == 0) { statussize = 0; bool clearirq = true; if ((commandcode[0] & 31) == 0x08) { for (int cnt = 0; cnt < 4; cnt++) { if (Drive[cnt & 3].result) { clearirq = false; break; } } } if (clearirq == true) { isintpending = false; } i8272astatus = 0x80; }
@@ -1607,6 +1655,7 @@ typedef struct d88secheader {
 
 typedef struct fddcontract4rw {
     d88header flpimgheader;
+    UINT32 headersize;
     d88secheader flpimgsecheadertmp;
     UINT32 track;
     UINT32 sector;
@@ -1626,6 +1675,7 @@ i8272a GN8012_i8272;
 i8255 GN8012_i8255;
 
 int fddriveclose(int prm_0) {
+    fdd[(prm_0) & 3].headersize = sizeof(d88header);
     fdd[(prm_0) & 3].track = -1;
     fdd[(prm_0) & 3].sector = -1;
     fdd[(prm_0) & 3].sectortmpl = -1;
@@ -1634,55 +1684,110 @@ int fddriveclose(int prm_0) {
     fdd[(prm_0) & 3].diskaccessing = false;
     GN8012_i8272.Diskstat[(prm_0 & 3)].diskinserted = false;
     GN8012_i8272.Diskstat[(prm_0 & 3)].motoractive = false;
-    if (fdd[(prm_0) & 3].datafile == 0) { return 0; }
-    int rettmp = fclose(fdd[(prm_0) & 3].datafile);
-    fdd[(prm_0) & 3].datafile = 0;
+    // Clear stale sector offsets even if no disk file is open.
     for (int cnt2 = 0; cnt2 < 164; cnt2++) {
         for (int cnt3 = 0; cnt3 < 256; cnt3++) {
             fddseekptr[cnt3][cnt2][(prm_0) & 3] = -1;
         }
     }
+    if (fdd[(prm_0) & 3].datafile == 0) { return 0; }
+    int rettmp = fclose(fdd[(prm_0) & 3].datafile);
+    fdd[(prm_0) & 3].datafile = 0;
     return rettmp;
 }
 void fddriveload(int prm_0,const char* prm_1) {
-    if (fdd[(prm_0) & 3].datafile != 0) { fddriveclose(prm_0); }
-    fdd[(prm_0) & 3].track = -1;
-    fdd[(prm_0) & 3].sector = -1;
-    fdd[(prm_0) & 3].sectortmpl = -1;
-    fdd[(prm_0) & 3].sectortmpl2 = -1;
-    fdd[(prm_0) & 3].headerside = false;
-    fdd[(prm_0) & 3].diskaccessing = false;
+    fddriveclose(prm_0);
+    // Allow read-only images and avoid truncating existing files on fallback.
+    bool readonly = false;
     fdd[(prm_0) & 3].datafile = fopen(prm_1, "rb+");
     if (fdd[(prm_0) & 3].datafile == 0) {
-        fdd[(prm_0) & 3].datafile = fopen(prm_1, "wb+");
+        fdd[(prm_0) & 3].datafile = fopen(prm_1, "rb");
+        readonly = (fdd[(prm_0) & 3].datafile != 0);
+    }
+    if (fdd[(prm_0) & 3].datafile == 0) {
+        fdd[(prm_0) & 3].datafile = fopen(prm_1, "ab+");
+        if (fdd[(prm_0) & 3].datafile != 0) {
+            // Reopen without append mode so later writes can seek.
+            fclose(fdd[(prm_0) & 3].datafile);
+            fdd[(prm_0) & 3].datafile = fopen(prm_1, "rb+");
+        }
     }
     if (fdd[(prm_0) & 3].datafile == 0) { return; }
-    GN8012_i8272.Diskstat[(prm_0 & 3)].diskinserted = true;
-    GN8012_i8272.Diskstat[(prm_0 & 3)].motoractive = true;
-    fseek(fdd[(prm_0) & 3].datafile, 0, SEEK_SET);
-    fread(&(fdd[(prm_0) & 3].flpimgheader), sizeof(fdd[(prm_0) & 3].flpimgheader), 1, fdd[(prm_0) & 3].datafile);
-    for (int cnt2 = 0; cnt2 < 164; cnt2++) {
-        if (fdd[(prm_0) & 3].flpimgheader.trackoffs[cnt2] != 0) {
-            fseek(fdd[(prm_0) & 3].datafile, fdd[(prm_0) & 3].flpimgheader.trackoffs[cnt2], SEEK_SET);
-            fread(&(fdd[(prm_0) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_0) & 3].datafile);
-            if (fdd[(prm_0) & 3].flpimgheader.trackoffs[cnt2] != 0) {
-                for (int cnt = 0; cnt < fdd[(prm_0) & 3].flpimgsecheadertmp.sectorspertrack * ((fdd[(prm_0) & 3].flpimgsecheadertmp.dimensity == 0x00) ? 2 : ((fdd[(prm_0) & 3].flpimgsecheadertmp.dimensity == 0x40) ? 1 : ((fdd[(prm_0) & 3].flpimgsecheadertmp.dimensity == 0x01) ? 1 : 4))); cnt++) {
-                    fdd[(prm_0) & 3].pointerofsecheader = fdd[(prm_0) & 3].flpimgheader.trackoffs[cnt2] + (cnt * ((128 << fdd[(prm_0) & 3].flpimgsecheadertmp.sectorsize) + 0x10));
-                    fseek(fdd[(prm_0) & 3].datafile, fdd[(prm_0) & 3].pointerofsecheader, SEEK_SET);
-                    fread(&(fdd[(prm_0) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_0) & 3].datafile);
-                    fddseekptr[fdd[(prm_0) & 3].flpimgsecheadertmp.sector][(fdd[(prm_0) & 3].flpimgsecheadertmp.cylinder << 1) | (fdd[(prm_0) & 3].flpimgsecheadertmp.headerside ? 1 : 0)][(prm_0) & 3] = fdd[(prm_0) & 3].pointerofsecheader;
+    // Reject disk sizes that extend beyond the image file.
+    if (fseek(fdd[(prm_0) & 3].datafile, 0, SEEK_END) != 0) { fddriveclose(prm_0); return; }
+    long filesize = ftell(fdd[(prm_0) & 3].datafile);
+    if (filesize < 0) { fddriveclose(prm_0); return; }
+    memset(&fdd[(prm_0) & 3].flpimgheader, 0, sizeof(d88header));
+    if (filesize != 0) {
+        fseek(fdd[(prm_0) & 3].datafile, 0, SEEK_SET);
+        // Older D88 images have 160 track offsets and a 672-byte header.
+        if (fread(&fdd[(prm_0) & 3].flpimgheader, 0x2a0, 1, fdd[(prm_0) & 3].datafile) != 1) {
+            fddriveclose(prm_0);
+            return;
+        }
+        UINT32 firsttrack = fdd[(prm_0) & 3].flpimgheader.disksize;
+        for (int cnt = 0; cnt < 160; cnt++) {
+            UINT32 pos = fdd[(prm_0) & 3].flpimgheader.trackoffs[cnt];
+            if (pos != 0 && pos < firsttrack) { firsttrack = pos; }
+        }
+        if (firsttrack == 0x2a0) { fdd[(prm_0) & 3].headersize = 0x2a0; }
+        else if (fread(&fdd[(prm_0) & 3].flpimgheader.trackoffs[160], 16, 1,
+                       fdd[(prm_0) & 3].datafile) != 1) { fddriveclose(prm_0); return; }
+        if (fdd[(prm_0) & 3].flpimgheader.disksize < fdd[(prm_0) & 3].headersize ||
+            fdd[(prm_0) & 3].flpimgheader.disksize > (UINT32)filesize) { fddriveclose(prm_0); return; }
+        for (int cnt2 = 0; cnt2 < 164; cnt2++) {
+            UINT32 pos = fdd[(prm_0) & 3].flpimgheader.trackoffs[cnt2];
+            if (pos == 0) { continue; }
+            // Track offsets need not be sorted; find the next physical track.
+            UINT32 trackend = fdd[(prm_0) & 3].flpimgheader.disksize;
+            for (int cnt = 0; cnt < 164; cnt++) {
+                UINT32 next = fdd[(prm_0) & 3].flpimgheader.trackoffs[cnt];
+                if (next > pos && next < trackend) { trackend = next; }
+            }
+            // Walk records by stored data length, independently of N and density.
+            UINT16 sectors = 1;
+            for (int cnt = 0; cnt < sectors; cnt++) {
+                if (pos < fdd[(prm_0) & 3].headersize || pos > trackend || trackend - pos < sizeof(d88secheader)) {
+                    fddriveclose(prm_0);
+                    return;
                 }
+                if (fseek(fdd[(prm_0) & 3].datafile, pos, SEEK_SET) != 0 ||
+                    fread(&fdd[(prm_0) & 3].flpimgsecheadertmp, sizeof(d88secheader), 1, fdd[(prm_0) & 3].datafile) !=
+                        1) {
+                    fddriveclose(prm_0);
+                    return;
+                }
+                if (cnt == 0) { sectors = fdd[(prm_0) & 3].flpimgsecheadertmp.sectorspertrack; }
+                if (sectors == 0 ||
+                    fdd[(prm_0) & 3].flpimgsecheadertmp.sectordatasz > trackend - pos - sizeof(d88secheader)) {
+                    fddriveclose(prm_0);
+                    return;
+                }
+                // Only use C/H IDs that fit the existing lookup table.
+                if (fdd[(prm_0) & 3].flpimgsecheadertmp.cylinder < 82 &&
+                    fdd[(prm_0) & 3].flpimgsecheadertmp.headerside < 2) {
+                    fddseekptr[fdd[(prm_0) & 3].flpimgsecheadertmp.sector]
+                              [(fdd[(prm_0) & 3].flpimgsecheadertmp.cylinder << 1) |
+                               fdd[(prm_0) & 3].flpimgsecheadertmp.headerside][(prm_0) & 3] = pos;
+                }
+                pos += sizeof(d88secheader) + fdd[(prm_0) & 3].flpimgsecheadertmp.sectordatasz;
             }
         }
     }
-    GN8012_i8272.Diskstat[(prm_0 & 3)].isprotected = (fdd[(prm_0) & 3].flpimgheader.writeprotect == 0x10) ? true : false;
+    GN8012_i8272.Diskstat[(prm_0 & 3)].diskinserted = true;
+    GN8012_i8272.Diskstat[(prm_0 & 3)].motoractive = true;
+    GN8012_i8272.Diskstat[(prm_0 & 3)].isprotected = readonly || (fdd[(prm_0) & 3].flpimgheader.writeprotect == 0x10);
     return;
 }
 
-UINT8 readbuf4fddrivebus[256 * 4];
+// One full sector per drive; D88 stored data lengths are 16-bit.
+UINT8 readbuf4fddrivebus[4][0x10000];
 
 int fddrivebus(int prm_0, int prm_1, int prm_2, int prm_3, int prm_4) {
     UINT32 sectortmp = -1;
+    // Check lookup indices and reject writes to protected images.
+    if (prm_2 < 0 || prm_2 > 255 || prm_3 < 0 || prm_3 >= 82 || fdd[(prm_4 >> 8) & 3].datafile == 0) { return 0xff; }
+    if (((prm_4 & 3) == 0 || (prm_4 & 3) == 2) && GN8012_i8272.Diskstat[(prm_4 >> 8) & 3].isprotected) { return 0xff; }
     fdd[(prm_4 >> 8) & 3].diskaccessing = true;
     
     if (!(fdd[(prm_4 >> 8) & 3].track == prm_3 && fdd[(prm_4 >> 8) & 3].sector == prm_2 && fdd[(prm_4 >> 8) & 3].headerside == ((prm_4 & 0x400) ? true : false))) {
@@ -1714,11 +1819,27 @@ int fddrivebus(int prm_0, int prm_1, int prm_2, int prm_3, int prm_4) {
         if (sectortmp != -1) {
             fdd[(prm_4 >> 8) & 3].pointerofsecheader = sectortmp;
             fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].pointerofsecheader, SEEK_SET);
-            fread(&(fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_4 >> 8) & 3].datafile);
+            if (fread(&(fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp), 0x10, 1, fdd[(prm_4 >> 8) & 3].datafile) != 1) {
+                return 0xff;
+            }
             fdd[(prm_4 >> 8) & 3].sectortmpl = 0;
         }
         if (sectortmp == -1) {
             if ((prm_4 & 3) == 0) {
+                if (((prm_3 << 1) | ((prm_4 & 0x400) ? 1 : 0)) >=
+                    (fdd[(prm_4 >> 8) & 3].headersize - 32) / 4) { return 0xff; }
+                // Create only 256-byte sectors at the end of the image.
+                // The fixed-size layout must not overwrite variable-length records.
+                if (prm_2 < 1 || prm_2 > 16 || prm_0 < 0 || prm_0 >= 256) { return 0xff; }
+                if (fseek(fdd[(prm_4 >> 8) & 3].datafile, 0, SEEK_END) != 0 ||
+                    ftell(fdd[(prm_4 >> 8) & 3].datafile) != fdd[(prm_4 >> 8) & 3].flpimgheader.disksize) {
+                    return 0xff;
+                }
+                UINT32 trackpos = fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[(prm_3 * 2) + ((prm_4 & 0x400) ? 1 : 0)];
+                if (trackpos == 0) { trackpos = fdd[(prm_4 >> 8) & 3].flpimgheader.disksize; }
+                if (trackpos + ((256 + 0x10) * (prm_2 - 1)) != fdd[(prm_4 >> 8) & 3].flpimgheader.disksize) {
+                    return 0xff;
+                }
                 if (fdd[(prm_4 >> 8) & 3].flpimgheader.disksize == 0) { 
                     for (int cnt = 0; cnt < 17; cnt++) {
                         fdd[(prm_4 >> 8) & 3].flpimgheader.diskname[cnt] = 0;
@@ -1733,7 +1854,8 @@ int fddrivebus(int prm_0, int prm_1, int prm_2, int prm_3, int prm_4) {
                         fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[cnt] = 0;
                     }
                     fseek(fdd[(prm_4 >> 8) & 3].datafile, 0, SEEK_SET);
-                    fwrite(&fdd[(prm_4 >> 8) & 3].flpimgheader, sizeof(d88header), 1, fdd[(prm_4 >> 8) & 3].datafile);
+                    fwrite(&fdd[(prm_4 >> 8) & 3].flpimgheader, fdd[(prm_4 >> 8) & 3].headersize, 1,
+                           fdd[(prm_4 >> 8) & 3].datafile);
                 }
                 if (fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[(prm_3 * 2) + ((prm_4 & 0x400) ? 1 : 0)] == 0) {
                     fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[(prm_3 * 2) + ((prm_4 & 0x400) ? 1 : 0)] = fdd[(prm_4 >> 8) & 3].flpimgheader.disksize;
@@ -1757,18 +1879,26 @@ int fddrivebus(int prm_0, int prm_1, int prm_2, int prm_3, int prm_4) {
                 fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[(prm_3 * 2) + ((prm_4 & 0x400) ? 1 : 0)] + ((256 + 0x10) * (prm_2 - 1)), SEEK_SET);
                 fwrite(&d88contenttmp, 0x10, 1, fdd[(prm_4 >> 8) & 3].datafile);
                 fddseekptr[prm_2][(prm_3 << 1) | ((prm_4 & 0x400) ? 1 : 0)][(prm_4 >> 8) & 3] = fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[(prm_3 * 2) + ((prm_4 & 0x400) ? 1 : 0)] + ((256 + 0x10) * (prm_2 - 1));
+                // Keep the cached header and file offset in sync with the new sector.
+                fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp = d88contenttmp;
+                fdd[(prm_4 >> 8) & 3].pointerofsecheader =
+                    fddseekptr[prm_2][(prm_3 << 1) | ((prm_4 & 0x400) ? 1 : 0)][(prm_4 >> 8) & 3];
                 for (int cnt = 0; cnt < 256; cnt++) {
                     fputc(0xff, fdd[(prm_4 >> 8) & 3].datafile);
                 }
                 fdd[(prm_4 >> 8) & 3].flpimgheader.disksize += (256 + 0x10);
                 fseek(fdd[(prm_4 >> 8) & 3].datafile, 0, SEEK_SET);
-                fwrite(&fdd[(prm_4 >> 8) & 3].flpimgheader, sizeof(d88header), 1, fdd[(prm_4 >> 8) & 3].datafile);
+                // Preserve the header size so the first sector is not overwritten.
+                fwrite(&fdd[(prm_4 >> 8) & 3].flpimgheader, fdd[(prm_4 >> 8) & 3].headersize, 1,
+                       fdd[(prm_4 >> 8) & 3].datafile);
                 sectortmp = prm_2 - 1;
                 fdd[(prm_4 >> 8) & 3].sectortmpl = sectortmp;
                 fdd[(prm_4 >> 8) & 3].sectortmpl2 = ((prm_3 * 2) + ((prm_4 & 0x400) ? 1 : 0));
             }
             else if ((prm_4 & 3) == 3) {
-                return 0x00;
+                // Report a missing sector ID or an unformatted track.
+                return fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[(prm_3 << 1) | ((prm_4 & 0x400) ? 1 : 0)] == 0 ? 8
+                                                                                                                   : 4;
             }
             else {
                 return 0xff;
@@ -1779,19 +1909,30 @@ int fddrivebus(int prm_0, int prm_1, int prm_2, int prm_3, int prm_4) {
         fdd[(prm_4 >> 8) & 3].headerside = ((prm_4 & 0x400) ? true : false);
         //fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[fdd[(prm_4 >> 8) & 3].sectortmpl2] + (fdd[(prm_4 >> 8) & 3].sectortmpl * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)) + 0x10, SEEK_SET);
         fseek(fdd[(prm_4 >> 8) & 3].datafile, fddseekptr[prm_2][(prm_3 << 1) | ((prm_4 & 0x400) ? 1 : 0)][(prm_4 >> 8) & 3] + 0x10, SEEK_SET);
-        fread(&readbuf4fddrivebus + (256 * ((prm_4 >> 8) & 3)), 256, 1, fdd[(prm_4 >> 8) & 3].datafile);
+        // Read the stored data only, without crossing into the next sector header.
+        memset(readbuf4fddrivebus[(prm_4 >> 8) & 3], 0xff, sizeof(readbuf4fddrivebus[0]));
+        if (fread(readbuf4fddrivebus[(prm_4 >> 8) & 3], 1, fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectordatasz,
+                  fdd[(prm_4 >> 8) & 3].datafile) != fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectordatasz) {
+            fdd[(prm_4 >> 8) & 3].track = -1;
+            fdd[(prm_4 >> 8) & 3].sectortmpl = -1;
+            return 0xff;
+        }
     }
     if (fdd[(prm_4 >> 8) & 3].sectortmpl == -1) { return 0xff; }
+    // Do not wrap the byte offset or access data beyond the stored sector.
+    if ((prm_4 & 3) <= 1 && (prm_0 < 0 || prm_0 >= fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectordatasz)) {
+        return 0xff;
+    }
     switch (prm_4 & 3) {
     case 0:
         //fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[fdd[(prm_4 >> 8) & 3].sectortmpl2] + (fdd[(prm_4 >> 8) & 3].sectortmpl * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)) + 0x10 + prm_0, SEEK_SET);
         fseek(fdd[(prm_4 >> 8) & 3].datafile, fddseekptr[prm_2][(prm_3 << 1) | ((prm_4 & 0x400) ? 1 : 0)][(prm_4 >> 8) & 3] + 0x10 + prm_0, SEEK_SET);
         fputc(prm_1, fdd[(prm_4 >> 8) & 3].datafile);
-        readbuf4fddrivebus[(prm_0 & 0xFF) + (256 * ((prm_4 >> 8) & 3))] = prm_1 & 0xFF;
+        readbuf4fddrivebus[(prm_4 >> 8) & 3][prm_0] = prm_1 & 0xFF;
         break;
     case 1:
         //fseek(fdd[(prm_4 >> 8) & 3].datafile, fdd[(prm_4 >> 8) & 3].flpimgheader.trackoffs[fdd[(prm_4 >> 8) & 3].sectortmpl2] + (fdd[(prm_4 >> 8) & 3].sectortmpl * ((128 << fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.sectorsize) + 0x10)) + 0x10 + prm_0, SEEK_SET);
-        return readbuf4fddrivebus[(prm_0 & 0xFF) + (256 * ((prm_4 >> 8) & 3))];
+        return readbuf4fddrivebus[(prm_4 >> 8) & 3][prm_0];
         break;
     case 2:
         if (fdd[(prm_4 >> 8) & 3].flpimgsecheadertmp.isdeleted == 0 && (prm_1 & 1)) {
@@ -1818,8 +1959,12 @@ i8255 GN80_i8255;
 i8255 GN80_i8255_2;
 
 UINT8 data4fddc[4];
+// Keep both port C halves intact across the two CPU threads.
+SRWLOCK fddppilock = SRWLOCK_INIT;
 
 int i8255mac_GN8012(int prm_0, int prm_1, int prm_2) {
+    int retval = 0xff;
+    AcquireSRWLockExclusive(&fddppilock);
     switch (prm_2 & 1) {
     case 0:
         switch (prm_0) {
@@ -1834,18 +1979,21 @@ int i8255mac_GN8012(int prm_0, int prm_1, int prm_2) {
     case 1:
         switch (prm_0) {
         case 0:
-            return data4fddc[1] & 0xFF;
+            retval = data4fddc[1] & 0xFF;
             break;
         case 2:
-            return (data4fddc[2] >> 0) & 0x0F;
+            retval = (data4fddc[2] >> 0) & 0x0F;
             break;
         }
         break;
     }
-    return 0xff;
+    ReleaseSRWLockExclusive(&fddppilock);
+    return retval;
 }
 int i8255mac_GN80(int prm_0, int prm_1, int prm_2) {
     char recvcode4debug[64];
+    int retval = 0xff;
+    AcquireSRWLockExclusive(&fddppilock);
     switch (prm_2 & 1) {
     case 0:
         switch (prm_0) {
@@ -1856,19 +2004,21 @@ int i8255mac_GN80(int prm_0, int prm_1, int prm_2) {
             data4fddc[2] = (data4fddc[2] & 0xF0) | ((prm_1 >> 4) & 0xF);
             break;
         }
+        SetEvent(FDDCWakeEvent); // Wake the disk CPU for the next PPI handshake.
         break;
     case 1:
         switch (prm_0) {
         case 0:
-            return data4fddc[0] & 0xFF;
+            retval = data4fddc[0] & 0xFF;
             break;
         case 2:
-            return (data4fddc[2] >> 4) & 0x0F;
+            retval = (data4fddc[2] >> 4) & 0x0F;
             break;
         }
         break;
     }
-    return 0xff;
+    ReleaseSRWLockExclusive(&fddppilock);
+    return retval;
 }
 
 void sendfdcmd28001(int prm_0) {
@@ -1915,7 +2065,12 @@ int recvfdcmd28001w() {
     return recvvaluetmp;
 }
 int recvfdcmd28001c() {
-    while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; } Sleep(0); }
+    while (true) {
+        if (i8255mac_GN8012(2, 0, 1) & 0x08) { break; }
+        // The firmware-free disk service also sleeps until a command arrives.
+        if (FDDCWakeEvent != 0) { WaitForSingleObject(FDDCWakeEvent, 1); }
+        else { Sleep(1); }
+    }
     return recvfdcmd28001();
 }
 
@@ -2160,18 +2315,19 @@ int z80memaccess(int prm_0, int prm_1, int prm_2) {
             alucomp.l = ((galuop & 1) ? 0x000000ff : 0) | ((galuop & 2) ? 0x0000ff00 : 0) | ((galuop & 4) ? 0x00ff0000 : 0);
             break;
         case 0x40:
-            if (((prm_0 & 0x20) && beepenabled == false)/* || (!(prm_0 & 0x20) && beepenabled == true)*/) {
+            // Sound transitions depend on the written data, not the port address.
+            if (((prm_1 & 0x20) && beepenabled == false)/* || (!(prm_1 & 0x20) && beepenabled == true)*/) {
                 isbeepenabledinthecool = true;
                 if ((clockcount4beep - clockcount4beepprev) < F) { samplebase4beep = (((clockcount4beep - clockcount4beepprev) * ((UINT64)(SRATE))) / ((UINT64)((is8mhz ? 2 : 1) * (crtcactive ? (UINT64)1830000 : (UINT64)4000000)))) + samplebase4beeptiff; samplebase4beeptiff = samplebase4beep % F; clockcount4beepprev = clockcount4beep; }
             }
-            else if ((!(prm_0 & 0x20) && beepenabled == true)) {
+            else if ((!(prm_1 & 0x20) && beepenabled == true)) {
                 howmanybeepstopped++;
             }
             if (ispc8801 == true) {
-                if (((prm_0 & 0x80) && beepenabled2 == false)/* || (!(prm_0 & 0x80) && beepenabled2 == true)*/) {
+                if (((prm_1 & 0x80) && beepenabled2 == false)/* || (!(prm_1 & 0x80) && beepenabled2 == true)*/) {
                     isbeepenabledinthecool2 = true;
                 }
-                else if ((!(prm_0 & 0x80) && beepenabled2 == true)) {
+                else if ((!(prm_1 & 0x80) && beepenabled2 == true)) {
                     howmanybeepstopped_2++;
                 }
                 beepenabled2 = ((prm_1 >> 7) & 0x01) ? true : false;
@@ -2628,14 +2784,167 @@ extern void DrawGrp();
 void Z80INT(uint8 prm_0) { if (((intmasklevel & 0x8) == 0 && ((prm_0 / 2) >= (intmasklevel & 0x7))) && ispc8801 == true/* || ((intmasklevel & 0x8) && ((prm_0 / 2) > z80irqmaxes))*/) { return; } z80irqmaxes = prm_0 / 2; if (z80irqid >= 3 && z80irqid < 10) { z80irqid++; } else { if (z80irqid != 10) { z80irqid = 3; } } z80irqfnqueue[z80irqfnqueuepos] = prm_0; z80irqfnqueuepos = ((z80irqfnqueuepos + 1) & 0x7); }
 void Z80NMI() { z80irqid = 2; }
 
-void RunZ80Infinity(LPVOID* arg4rz80) { bool boolofwaitiinz80loop = true; UINT32 clockcounttemporary = 0; UINT32 clockcountold = 0; SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { howmanybeepstopped = 0; clockcountold = clockcount; int clockcountinternal = 0; int clockcountinternalold = 0; int z80timerbefore = time(NULL); while ((clockcount - clockcountold) < ((is8mhz ? 2 : 1) * ((ispc8801mk2srormore == true && ispc8801 == true) ? 4000000 : (crtcactive ? 1830000 : 4000000)))) { howmanybeepstopped = 0; boolofwaitiinz80loop = (boolofwaitiinz80loop) ? false : true; clockcountinternalold = 0; clockcountinternal = 0; GetSystemTime(&st_st); UINT32 Z80Corepfclock = ((ispc8801mk2srormore == true && ispc8801 == true) ? 4000000 : (crtcactive ? 1830000 : 4000000)); ispc80threadinrunningemulation = true; isbeepenabledinthecool = false; isbeepenabledinthecool2 = false; while (clockcountinternal < ((is8mhz ? 2 : 1) * (Z80Corepfclock / 60))) { while ((clockcountinternal - clockcountinternalold) < ((is8mhz ? 2 : 1) * (Z80Corepfclock / 600))) { for (int clockcountinternal2 = 0; clockcountinternal2 < ((Z80Corepfclock / 3 / 600) * 2); clockcountinternal2) { vbi = false; if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else if (z80irqid >= 3 && z80irqid <= 10) { Z80DoIRQ(z80irqfnqueue[z80irqfnqueuepos2]); z80irqfnqueuepos2 = ((z80irqfnqueuepos2 + 1) & 0x7); for (int cnt = 0; cnt < 10000; cnt++) { clockcounttemporary = Z80Run(); clockcountinternal += clockcounttemporary; clockcountinternal2 += clockcounttemporary; clockcount += clockcounttemporary; } } else { Z80DoNMI(); } if (z80irqid > 3 && z80irqid <= 10) { z80irqid--; } else { z80irqid = 0; } } vbi = false; clockcounttemporary = Z80Run(); z80irqmaxes = 8; clockcountinternal += clockcounttemporary; clockcountinternal2 += clockcounttemporary; clockcount += clockcounttemporary; } vbi = true; if ((ioporte6h & 2) && ispc8801 == true) { if ((upd3301stat & 0x10) && !(upd3301intm & 1)) { upd3301stat |= 2; } Z80INT(2); z80irqmaxes = 8; } for (int clockcountinternal2 = 0; clockcountinternal2 < ((Z80Corepfclock / 3 / 600) * 1); clockcountinternal2) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else if (z80irqid >= 3 && z80irqid <= 10) { Z80DoIRQ(z80irqfnqueue[z80irqfnqueuepos2]); z80irqfnqueuepos2 = ((z80irqfnqueuepos2 + 1) & 0x7); for (int cnt = 0; cnt < 10000; cnt++) { clockcounttemporary = Z80Run(); clockcountinternal += clockcounttemporary; clockcountinternal2 += clockcounttemporary; clockcount += clockcounttemporary; } } else { Z80DoNMI(); } if (z80irqid > 3 && z80irqid <= 10) { z80irqid--; } else { z80irqid = 0; } } vbi = true; clockcounttemporary = Z80Run(); z80irqmaxes = 8; clockcountinternal += clockcounttemporary; clockcountinternal2 += clockcounttemporary; clockcount += clockcounttemporary; }  /*vbi = vbi ? false : true;*/ if (ioporte6h & 1) { Z80INT(4); } } clockcountinternalold = clockcountinternal; } ispc80threadinrunningemulation = false; /*clockcount += clockcountinternal; /*drawgrpbool = true;*/ if (beepenabled) { beeprestart(); beep2400play(); } if (beepenabled2 && ispc8801 == true) { beep2restart(); beep2play(); } howmanybeepstopped = 0; howmanybeepstopped_2 = 0; GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < (16 + (boolofwaitiinz80loop ? 1 : 0)) && ststgoal16 >= 0) { if (isfullspeedenabled == false || speeddecinfullspeed == true) { Sleep((16 + (boolofwaitiinz80loop ? 1 : 0)) - ststgoal16); speeddecinfullspeed = false; } } }/*while (z80timerbefore == time(NULL)) {}*/ } }//UINT32 z80timemintab[2] = { 0, 0 }; SYSTEMTIME z80timeminta; while (true) { clockcount = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal = 0; GetSystemTime(&z80timeminta); z80timemintab[0] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); while (clockcountinternal < (graphicdraw ? 183000 : 400000)) { if (z80irqid != 0) { if (z80irqid == 1) { Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } clockcountinternal += Z80Run(); vbi = vbi ? false : true; } GetSystemTime(&z80timeminta); z80timemintab[1] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); clockcount += clockcountinternal; int timetowaitive = (z80timemintab[1] - z80timemintab[0]); /*if (timetowaitive < 0) { timetowaitive += 1000; }*/ if ((timetowaitive > 0) && (timetowaitive <= 100)) { Sleep(100 - timetowaitive); } else { Sleep(100); } } int z80timerint = time(NULL) - z80timerbefore; /*if (z80timerint < 1000) { Sleep(1000 - z80timerint); }*/ } }
+void RunZ80Infinity(LPVOID* arg4rz80) {
+    bool boolofwaitiinz80loop = true;
+    UINT32 clockcounttemporary = 0;
+    UINT32 clockcountold = 0;
+    SYSTEMTIME st_st;
+    SYSTEMTIME st_goal;
+    int ststgoal16;
+    while (true) {
+        howmanybeepstopped = 0;
+        clockcountold = clockcount;
+        int clockcountinternal = 0;
+        int clockcountinternalold = 0;
+        int z80timerbefore = time(NULL);
+        while ((clockcount - clockcountold) <
+               ((is8mhz ? 2 : 1) *
+                ((ispc8801mk2srormore == true && ispc8801 == true) ? 4000000 : (crtcactive ? 1830000 : 4000000)))) {
+            howmanybeepstopped = 0;
+            boolofwaitiinz80loop = (boolofwaitiinz80loop) ? false : true;
+            AcquireSRWLockExclusive(&cpulock);
+            clockcountinternalold = 0;
+            clockcountinternal = 0;
+            GetSystemTime(&st_st);
+            UINT32 Z80Corepfclock =
+                ((ispc8801mk2srormore == true && ispc8801 == true) ? 4000000 : (crtcactive ? 1830000 : 4000000));
+            ispc80threadinrunningemulation = true;
+            isbeepenabledinthecool = false;
+            isbeepenabledinthecool2 = false;
+            while (clockcountinternal < ((is8mhz ? 2 : 1) * (Z80Corepfclock / 60))) {
+                while ((clockcountinternal - clockcountinternalold) < ((is8mhz ? 2 : 1) * (Z80Corepfclock / 600))) {
+                    for (int clockcountinternal2 = 0; clockcountinternal2 < ((Z80Corepfclock / 3 / 600) * 2);
+                         clockcountinternal2) {
+                        vbi = false;
+                        if (z80irqid != 0) {
+                            if (z80irqid == 1) {
+                                Z80DoIRQ(z80irqfn);
+                                z80irqfn = 0;
+                            }
+                            else if (z80irqid >= 3 && z80irqid <= 10) {
+                                Z80DoIRQ(z80irqfnqueue[z80irqfnqueuepos2]);
+                                z80irqfnqueuepos2 = ((z80irqfnqueuepos2 + 1) & 0x7);
+                                // Continue with the normal per-instruction cycle budget.
+                            }
+                            else { Z80DoNMI(); }
+                            if (z80irqid > 3 && z80irqid <= 10) { z80irqid--; }
+                            else { z80irqid = 0; }
+                        }
+                        vbi = false;
+                        clockcounttemporary = Z80Run();
+                        z80irqmaxes = 8;
+                        clockcountinternal += clockcounttemporary;
+                        clockcountinternal2 += clockcounttemporary;
+                        clockcount += clockcounttemporary;
+                    }
+                    vbi = true;
+                    if ((ioporte6h & 2) && ispc8801 == true) {
+                        if ((upd3301stat & 0x10) && !(upd3301intm & 1)) { upd3301stat |= 2; }
+                        Z80INT(2);
+                        z80irqmaxes = 8;
+                    }
+                    for (int clockcountinternal2 = 0; clockcountinternal2 < ((Z80Corepfclock / 3 / 600) * 1);
+                         clockcountinternal2) {
+                        if (z80irqid != 0) {
+                            if (z80irqid == 1) {
+                                Z80DoIRQ(z80irqfn);
+                                z80irqfn = 0;
+                            }
+                            else if (z80irqid >= 3 && z80irqid <= 10) {
+                                Z80DoIRQ(z80irqfnqueue[z80irqfnqueuepos2]);
+                                z80irqfnqueuepos2 = ((z80irqfnqueuepos2 + 1) & 0x7);
+                                // Continue with the normal per-instruction cycle budget.
+                            }
+                            else { Z80DoNMI(); }
+                            if (z80irqid > 3 && z80irqid <= 10) { z80irqid--; }
+                            else { z80irqid = 0; }
+                        }
+                        vbi = true;
+                        clockcounttemporary = Z80Run();
+                        z80irqmaxes = 8;
+                        clockcountinternal += clockcounttemporary;
+                        clockcountinternal2 += clockcounttemporary;
+                        clockcount += clockcounttemporary;
+                    } /*vbi = vbi ? false : true;*/
+                    if (ioporte6h & 1) { Z80INT(4); }
+                }
+                clockcountinternalold = clockcountinternal;
+            }
+            ispc80threadinrunningemulation = false; /*clockcount += clockcountinternal; /*drawgrpbool = true;*/
+            if (beepenabled) {
+                beeprestart();
+                beep2400play();
+            }
+            if (beepenabled2 && ispc8801 == true) {
+                beep2restart();
+                beep2play();
+            }
+            howmanybeepstopped = 0;
+            howmanybeepstopped_2 = 0;
+            ReleaseSRWLockExclusive(&cpulock);
+            GetSystemTime(&st_goal);
+            ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds);
+            if (ststgoal16 < 0) { ststgoal16 += 1000; }
+            if (ststgoal16 < (16 + (boolofwaitiinz80loop ? 1 : 0)) && ststgoal16 >= 0) {
+                if (isfullspeedenabled == false || speeddecinfullspeed == true) {
+                    Sleep((16 + (boolofwaitiinz80loop ? 1 : 0)) - ststgoal16);
+                    speeddecinfullspeed = false;
+                }
+            }
+        } /*while (z80timerbefore == time(NULL)) {}*/
+    }
+} // UINT32 z80timemintab[2] = { 0, 0 }; SYSTEMTIME z80timeminta; while (true) { clockcount = 0; int clockcountinternal
+  // = 0; int z80timerbefore = time(NULL); while (clockcount < (graphicdraw ? 1830000 : 4000000)) { clockcountinternal =
+  // 0; GetSystemTime(&z80timeminta); z80timemintab[0] = (z80timeminta.wMilliseconds) + (time(NULL) * 1000); while
+  // (clockcountinternal < (graphicdraw ? 183000 : 400000)) { if (z80irqid != 0) { if (z80irqid == 1) {
+  // Z80DoIRQ(z80irqfn); z80irqfn = 0; } else { Z80DoNMI(); } z80irqid = 0; } clockcountinternal += Z80Run(); vbi = vbi
+  // ? false : true; } GetSystemTime(&z80timeminta); z80timemintab[1] = (z80timeminta.wMilliseconds) + (time(NULL) *
+  // 1000); clockcount += clockcountinternal; int timetowaitive = (z80timemintab[1] - z80timemintab[0]); /*if
+  // (timetowaitive < 0) { timetowaitive += 1000; }*/ if ((timetowaitive > 0) && (timetowaitive <= 100)) { Sleep(100 -
+  // timetowaitive); } else { Sleep(100); } } int z80timerint = time(NULL) - z80timerbefore; /*if (z80timerint < 1000) {
+  // Sleep(1000 - z80timerint); }*/ } }
 
-void BeepService(LPVOID* arg4bs) { while (true) { if (beepenabled) { /*Beep(2400, 100);*/ beep2400play(); Sleep(16); } else { if (isbeepenabledinthecool == false) { beep2400stop(); } } if (beepenabled2) { /*Beep(2400, 100);*/ beep2play(); Sleep(16); } else { if (isbeepenabledinthecool2 == false) { beep2stop(); } } /*if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); }*/ } }
+void BeepService(LPVOID* arg4bs) {
+    while (true) {
+        if (beepenabled) { /*Beep(2400, 100);*/
+            beep2400play();
+            Sleep(16);
+        }
+        else {
+            if (isbeepenabledinthecool == false) { beep2400stop(); }
+        }
+        if (beepenabled2) { /*Beep(2400, 100);*/
+            beep2play();
+            Sleep(16);
+        }
+        else {
+            if (isbeepenabledinthecool2 == false) { beep2stop(); }
+        } /*if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); }*/
+        Sleep(1);
+    }
+}
 void BeepService2(LPVOID* arg4bs) { while (true) { if (beepenabled2) { /*Beep(2400, 100);*/ beep2play(); Sleep(16); } else { if (isbeepenabledinthecool2 == false) { beep2stop(); } } /*if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); }*/ } }
 void PC8012Service(LPVOID* arg4bs) {
     while (FDDCZ80Threadid == 0) { Sleep(0); }
     if (isloadedfddcfirmware == true) {
-        while (true) { if (fddconnected == true) { while (true) { GN8012.Execute(1); if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); } } } }
+        // Yield between disk CPU batches, waking immediately for PPI handshakes.
+        while (true) {
+            DWORD starttime = timeGetTime();
+            int clockcountinternal = 0;
+            AcquireSRWLockExclusive(&fddcpulock);
+            if (fddconnected == true) {
+                while (clockcountinternal < 4000) {
+                    clockcountinternal += GN8012.Execute(1) + 1;
+                    if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); }
+                }
+            }
+            ReleaseSRWLockExclusive(&fddcpulock);
+            DWORD elapsedtime = timeGetTime() - starttime;
+            if (elapsedtime < 1) {
+                if (FDDCWakeEvent != 0) { WaitForSingleObject(FDDCWakeEvent, 1 - elapsedtime); }
+                else { Sleep(1 - elapsedtime); }
+            }
+        }
         //SYSTEMTIME st_st; SYSTEMTIME st_goal; int ststgoal16; while (true) { clockcountpc8012 = 0; int clockcountinternal = 0; int z80timerbefore = time(NULL); while (clockcountpc8012 < 4000000) { clockcountinternal = 0; GetSystemTime(&st_st); UINT32 Z80Corepfclock = 4000000 / 60; if (fddconnected == true) { while (true) { clockcountinternal += (GN8012.Execute(1) + 1); if (GN8012_i8272.is_int_pending()) { GN8012.INT(0); } if (clockcountinternal >= Z80Corepfclock) { break; } } } clockcountpc8012 += clockcountinternal; GetSystemTime(&st_goal); ststgoal16 = (st_goal.wMilliseconds) - (st_st.wMilliseconds); if (ststgoal16 < 0) { ststgoal16 += 1000; } if (ststgoal16 < 16 && ststgoal16 >= 0) { Sleep(16 - ststgoal16); } } }
     }
     else {
@@ -2682,11 +2991,13 @@ void PC8012Service(LPVOID* arg4bs) {
                     driveid = recvfdcmd28001();
                     track = recvfdcmd28001();
                     sector = recvfdcmd28001();
+                    // Consume invalid transfers too, without writing past disk RAM.
+                    iserroroccruuedondu = driveid >= 4 || amountofsec > sizeof(fddcmemory) / 256;
                     for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
-                        //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
-                        fddcmemory[cnt] = recvfdcmd28001();
+                        recvsendtmp16 = recvfdcmd28001();
+                        if (iserroroccruuedondu == false) { fddcmemory[cnt] = recvsendtmp16; }
                     }
-                    if (GN8012_i8272.Diskstat[driveid].isprotected == true) {
+                    if (iserroroccruuedondu || GN8012_i8272.Diskstat[driveid].isprotected == true) {
                         iserroroccruuedondu = true;
                     }
                     else {
@@ -2701,12 +3012,15 @@ void PC8012Service(LPVOID* arg4bs) {
                     driveid = recvfdcmd28001();
                     track = recvfdcmd28001();
                     sector = recvfdcmd28001();
-                    if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
+                    // The read buffer starts at 1000h inside the 16 KiB disk RAM.
+                    if (driveid < 4 && amountofsec <= (sizeof(fddcmemory) - 0x1000) / 256 &&
+                        GN8012_i8272.Diskstat[driveid].diskinserted == true) {
                         readbufexist = true;
                         iserroroccruuedondu = false;
                         for (int cnt = 0; cnt < amountofsec; cnt++) {
                             fddrivebus(0, 0, (cnt)+sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 1);
-                            memcpy(&fddcmemory[(cnt * 256) + 0x1000], readbuf4fddrivebus + (driveid * 256), 256);
+                            // This transfer path still copies 256 bytes from the selected drive.
+                            memcpy(&fddcmemory[(cnt * 256) + 0x1000], readbuf4fddrivebus[driveid & 3], 256);
                         }
                     }
                     else {
@@ -2715,8 +3029,10 @@ void PC8012Service(LPVOID* arg4bs) {
                     }
                     break;
                 case 0x03:
-                    if (readbufexist == false) {
-                        while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; } }
+                    if (readbufexist == false || amountofsec > (sizeof(fddcmemory) - 0x1000) / 256) {
+                        readbufexist = false;
+                        iserroroccruuedondu = true;
+                        while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; } Sleep(1); }
                     }
                     else {
                         for (int cnt = 0; cnt < (amountofsec * 256); cnt++) {
@@ -2734,7 +3050,8 @@ void PC8012Service(LPVOID* arg4bs) {
                     driveid2 = recvfdcmd28001();
                     track2 = recvfdcmd28001();
                     sector2 = recvfdcmd28001();
-                    if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
+                    if (driveid < 4 && driveid2 < 4 &&
+                        GN8012_i8272.Diskstat[driveid].diskinserted == true) {
                         if (GN8012_i8272.Diskstat[driveid2].isprotected == true) {
                             iserroroccruuedondu = true;
                         }
@@ -2752,7 +3069,7 @@ void PC8012Service(LPVOID* arg4bs) {
                     break;
                 case 0x05:
                     driveid = recvfdcmd28001();
-                    if (GN8012_i8272.Diskstat[driveid2].isprotected == true) {
+                    if (driveid >= 4 || GN8012_i8272.Diskstat[driveid].isprotected == true) {
                         iserroroccruuedondu = true;
                     }
                     else {
@@ -2816,7 +3133,7 @@ void PC8012Service(LPVOID* arg4bs) {
                     track = recvfdcmd28001();
                     sector = recvfdcmd28001();
                     transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                    if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
+                    if (driveid < 4 && GN8012_i8272.Diskstat[driveid].diskinserted == true) {
                         iserroroccruuedondu = false;
                         for (int cnt = 0; cnt < amountofsec * 256; cnt++) {
                             fddcz80memaccess(transaddr + cnt, fddrivebus(cnt % 256, 0, (cnt / 256) + sector, ((drivemode & (1 << driveid)) ? (track / 2) : track), ((drivemode & (1 << driveid)) ? ((track % 2) ? 0x400 : 0) : 0) | ((driveid & 3) << 8) | 1), 0);
@@ -2832,7 +3149,7 @@ void PC8012Service(LPVOID* arg4bs) {
                     track = recvfdcmd28001();
                     sector = recvfdcmd28001();
                     transaddr = ((recvfdcmd28001() << 8) & 0xFF00) | (recvfdcmd28001() & 0xFF);
-                    if (GN8012_i8272.Diskstat[driveid].diskinserted == true) {
+                    if (driveid < 4 && GN8012_i8272.Diskstat[driveid].diskinserted == true) {
                         if (GN8012_i8272.Diskstat[driveid].isprotected == false) {
                             iserroroccruuedondu = false;
                             for (int cnt = 0; cnt < amountofsec * 256; cnt++) {
@@ -2852,13 +3169,15 @@ void PC8012Service(LPVOID* arg4bs) {
                     driveid = recvfdcmd28001();
                     track = recvfdcmd28001();
                     sector = recvfdcmd28001();
+                    iserroroccruuedondu = driveid >= 4 || amountofsec > sizeof(fddcmemory) / 256;
                     for (int cnt = 0; cnt < (amountofsec * 128); cnt++) {
-                        //if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; }
                         recvsendtmp16 = recvfdcmd28001w();
-                        fddcmemory[(cnt * 2) + 0] = (recvsendtmp16 >> (8 * 0)) & 0xFF;
-                        fddcmemory[(cnt * 2) + 1] = (recvsendtmp16 >> (8 * 1)) & 0xFF;
+                        if (iserroroccruuedondu == false) {
+                            fddcmemory[(cnt * 2) + 0] = (recvsendtmp16 >> (8 * 0)) & 0xFF;
+                            fddcmemory[(cnt * 2) + 1] = (recvsendtmp16 >> (8 * 1)) & 0xFF;
+                        }
                     }
-                    if (GN8012_i8272.Diskstat[driveid].isprotected == true) {
+                    if (iserroroccruuedondu || GN8012_i8272.Diskstat[driveid].isprotected == true) {
                         iserroroccruuedondu = true;
                     }
                     else {
@@ -2869,8 +3188,10 @@ void PC8012Service(LPVOID* arg4bs) {
                     }
                     break;
                 case 0x12:
-                    if (readbufexist == false) {
-                        while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; } }
+                    if (readbufexist == false || amountofsec > (sizeof(fddcmemory) - 0x1000) / 256) {
+                        readbufexist = false;
+                        iserroroccruuedondu = true;
+                        while (true) { if ((i8255mac_GN8012(2, 0, 1) & 0x08)) { break; } Sleep(1); }
                     }
                     else {
                         for (int cnt = 0; cnt < (amountofsec * 128); cnt++) {
@@ -2892,6 +3213,11 @@ void PC8012Service(LPVOID* arg4bs) {
                     break;
                 case 0x14:
                     driveid = recvfdcmd28001();
+                    if (driveid >= 4) {
+                        iserroroccruuedondu = true;
+                        sendfdcmd28001(0x80);
+                        break;
+                    }
                     sendfdcmd28001((driveid & 3) | ((track == 0) ? 0x10 : 0) | ((track % 2) ? 0x04 : 0) | (GN8012_i8272.Diskstat[driveid].isprotected ? 0x40 : 0) | ((drivemode & (1 << driveid)) ? 0x08 : 0) | 0x20);
                     break;
                 case 0x15:
@@ -3043,6 +3369,7 @@ void __stdcall serialdaemon(void* prm_0) {
     COMSTAT tempcomstate;
     while (true) {
         if (ttyconnected == true) { if (rxdataready == false) { if (ttyfileloc != 0) { ClearCommError(ttyfileloc, 0, &tempcomstate); if (tempcomstate.cbInQue != 0) { ReadFile(ttyfileloc, &serialchar, 1, 0, 0); rxdataready = true; if ((ioporte6h & 4) && ispc8801 == true) { Z80INT(0); } } } serialstat = true; } }
+        Sleep(1); // Poll the serial port without spinning when idle.
     }
 }
 
@@ -3305,6 +3632,8 @@ uint8 colorbool[25];
 uint8 charattributefinal = 0;
 
 void DrawGrp() {
+    // Clip drawing to the fixed 80-column attribute buffer.
+    int drawcolumns = _min(linecharnum + 2, 80);
     charattribute = 0;
     if (ispc8801 == true) {
         for (int cnt = 0; cnt < 8; cnt++) { DeleteObject(hBackGround[cnt + 64]); DeleteObject(hBackGround[cnt + 64 + 128]); DeleteObject(hBackGround[cnt + 72]); DeleteObject(hBackGround[cnt + 72 + 128]); hBackGround[cnt + 64] = CreateSolidBrush(RGB(((palette512_8bt[cnt][0] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][1] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][0] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 72] = CreateSolidBrush(RGB(((palette512_8bt[cnt][2] >> 3) & 7) * 73 / 2, ((palette512_8bt[cnt][3] >> 0) & 7) * 73 / 2, ((palette512_8bt[cnt][2] >> 0) & 7) * 73 / 2)); hBackGround[cnt + 64 + 128] = CreateSolidBrush(RGB(0, (((((((palette512_8bt[cnt][0] >> 3) & 7) + 1) * 28) * 77) + (((((palette512_8bt[cnt][1] >> 0) & 7) + 1) * 28) * 151) + (((((palette512_8bt[cnt][0] >> 0) & 7) + 1) * 28) * 28)) / 256) + 3, 0)); hBackGround[cnt + 72 + 128] = CreateSolidBrush(RGB(0, (((((((palette512_8bt[cnt][2] >> 3) & 7) + 1) * 28) * 77) + (((((palette512_8bt[cnt][3] >> 0) & 7) + 1) * 28) * 151) + (((((palette512_8bt[cnt][2] >> 0) & 7) + 1) * 28) * 28)) / 256), 0)); cBackGround[cnt + 64] = GetBrushColor(hBackGround[cnt + 64]); cBackGround[cnt + 72] = GetBrushColor(hBackGround[cnt + 72]); cBackGround[cnt + 64 + 128] = GetBrushColor(hBackGround[cnt + 64 + 128]); cBackGround[cnt + 72 + 128] = GetBrushColor(hBackGround[cnt + 72 + 128]); }
@@ -3371,7 +3700,8 @@ void DrawGrp() {
 
                 if (ispc8801 == true) {
                     for (int drawbacky = 0; drawbacky < ((grpheight25 || ((colorfullgraphicmode == true && hiresgrpresol200 == true) && ispc8801 == true)) ? 25 : 20); drawbacky++) {
-                        for (int drawbackx = 0; drawbackx < (pc8001widthflag ? (linecharnum + 2) : ((linecharnum + 2) / 2)); drawbackx++) {
+                        for (int drawbackx = 0;
+                             drawbackx < (pc8001widthflag ? drawcolumns : (drawcolumns / 2)); drawbackx++) {
                             if (colorfullgraphicmode == true && hiresgrpresol200 == true) {
                                 //SetPalette4emu2(((UINT32)palette512_8bt[0][0] & 0x3F) | (((UINT32)palette512_8bt[0][1] & 0x7) << 6));
                                 SetPalette4emu(64);
@@ -3451,7 +3781,10 @@ void DrawGrp() {
                                     else {
                                         UINT8 colortmp = (((gvram[0][(((drawbackx * 2) + (((drawbacky * (grpheight25 ? 8 : 10)) + cnt2) * 80))) + ((cnt % 8) / 4)] << (((cnt % 8) % 4) * 2)) & 192) >> 6) & 3;
                                         if (colortmp != 0) {
-                                            if (colortmp <= 2) {
+                                            if (colortmp == 3) {
+                                                SetPalette4emu((crtc3 >> 5) & 7);
+                                            }
+                                            else if (colortmp <= 2) {
                                                 SetPalette4emu((colortmp * 2) | (fullgrpmode ? 1 : 0));
                                             }
                                             SetPset2((drawbackx * 8) + cnt, (drawbacky * (grpheight25 ? 8 : 10)) + cnt2);
@@ -3469,22 +3802,27 @@ void DrawGrp() {
                     if (crtmodectrl == false) { SetPalette4emu(32 + bgcolor); }
                     else { SetPalette4emu(32 + 8); }
                     for (int drawbacky = 0; drawbacky < (grpheight25 ? 25 : 20); (linespace ? (drawbacky += 2) : (drawbacky++))) {
-                        for (int drawbackx = 0; drawbackx < (pc8001widthflag ? (linecharnum + 2) : ((linecharnum + 2) / 2)); drawbackx++) {
+                        for (int drawbackx = 0;
+                             drawbackx < (pc8001widthflag ? drawcolumns : (drawcolumns / 2)); drawbackx++) {
                             if (((chkedbb8 * 0xbb8) + ((drawbackx * (pc8001widthflag ? 1 : 2)) + ((drawbacky / (linespace ? 2 : 1)) * 120))) > (dmatc[2] & 0x3FFF)) { breakdowndgp = true; break; }
                             uint8 char4show = crtcmemaccess(dmaas[2] + (chkedbb8 * 0xbb8) + ((drawbackx * (pc8001widthflag ? 1 : 2)) + ((drawbacky / (linespace ? 2 : 1)) * 120)), 0, 1);
                             attributegcold = false;
                             charattribute = (graphiccodes[(80 * (drawbacky / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][0]);
                             fontcolors = graphiccodes[(80 * (drawbacky / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7; grpcolors = graphiccodes[(80 * (drawbacky / (linespace ? 2 : 1))) + (drawbackx * (pc8001widthflag ? 1 : 2))][1] & 7;
+                            // Restrict both cursor shapes to their position and visible blink phase.
+                            bool cursordraw = cursx == (drawbackx * (pc8001widthflag ? 1 : 2)) && cursy == drawbacky &&
+                                (blinkai2 == false || (cursortype & 1) == 0);
                             if (((blinkai == false) || ((charattribute & 2) == 0)) && ((charattribute & 1) == 0)) {
                                 if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } }
                                 else { SetPalette4emu(9); }
                                 bool rendreverted = ((charattribute & 4) ? true : false);
-                                if ((((((cursx != -1 && cursy != -1) && (cursx == (drawbackx * (pc8001widthflag ? 1 : 2)) && cursy == drawbacky)) && ((blinkai2 == false) || (cursortype == 2))) ? true : false))) { rendreverted = (rendreverted ? false : true); }
+                                if (cursordraw && (cursortype & 2)) { rendreverted = (rendreverted ? false : true); }
                                 if (linecharnum != 0){
                                     if ((charattribute & 128) || (attributegcold == true)) { for (int cnt = 0; cnt < 8; cnt++) { if (((char4show >> cnt) & 1) ^ (rendreverted ? 1 : 0)) { SetBox(((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 0)) - 0, ((drawbacky + 0) * 8) + ((int)(2 * ((cnt % 4) + 0))) - 0, ((drawbackx + 0) * 8) + (4 * ((cnt / 4) + 1)) - 0, ((drawbacky + 0) * 8) + ((int)(2 * ((cnt % 4) + 1))) - 0); } } }
                                     else { /*DrawFontUS(((drawbackx + 0) * 8), ((drawbacky + 0) * 9), char4show, prevchar[drawbackx]);*/ DrawFont_(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), char4show, rendreverted); prevchar[drawbackx] = char4show; }
-                                    if ((cursortype & 2) == 0) {
-                                        if (blinkai2 == false || (cursortype & 1) == 0) { SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8) + 6, ((drawbackx + 1) * 8) - 1, ((drawbacky + 1) * 8) - 1); }
+                                    if (cursordraw && (cursortype & 2) == 0) {
+                                        SetBox(drawbackx * 8, (drawbacky * 8) + 6,
+                                            ((drawbackx + 1) * 8) - 1, ((drawbacky + 1) * 8) - 1);
                                     }
                                     //SetPalette4emu(9); SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8) - 0, ((drawbacky + 1) * 8) - 0);
                                     if (charattribute & 64) { SetBox(((drawbackx + 0) * 8) + 3, ((drawbacky + 0) * 8), ((drawbackx + 0) * 8) + 4, ((drawbacky + 1) * 8) - 0); }
@@ -3493,10 +3831,17 @@ void DrawGrp() {
                                 }
                             }
                             else {
-                                if ((((((cursx != -1 && cursy != -1) && (cursx == (drawbackx * (pc8001widthflag ? 1 : 2)) && cursy == drawbacky)) && ((blinkai2 == false) || (cursortype == 2))) ? true : false))) { 
+                                if (cursordraw) {
                                     if (crtmodectrl == false) { if (charattribute & 128) { SetPalette4emu(grpcolors); } else { SetPalette4emu(fontcolors); } }
                                     else { SetPalette4emu(9); }
-                                    SetBox(((drawbackx + 0) * 8), ((drawbacky + 0) * 8), ((drawbackx + 1) * 8), ((drawbacky + 1) * 8));
+                                    if (cursortype & 2) {
+                                        SetBox(drawbackx * 8, drawbacky * 8,
+                                            (drawbackx + 1) * 8, (drawbacky + 1) * 8);
+                                    }
+                                    else {
+                                        SetBox(drawbackx * 8, (drawbacky * 8) + 6,
+                                            ((drawbackx + 1) * 8) - 1, ((drawbacky + 1) * 8) - 1);
+                                    }
                                 }
                             }
                         }
@@ -3539,6 +3884,9 @@ void Drawbackground(LPVOID* arg4dbg) {
 }
 
 void ResetEmu() {
+    // Reset only after both CPUs have finished their current emulation batch.
+    AcquireSRWLockExclusive(&cpulock);
+    AcquireSRWLockExclusive(&fddcpulock);
     attributesize = 20;
     biosromenabled = false;
 
@@ -3674,6 +4022,9 @@ void ResetEmu() {
         memset(memory, 0, 32768);
     }
 
+    AcquireSRWLockExclusive(&fddppilock);
+    memset(data4fddc, 0, sizeof(data4fddc)); // Clear the shared PPI handshake signals.
+    ReleaseSRWLockExclusive(&fddppilock);
     GN8012_i8255.init_i8255();
     GN8012_i8272.init_i8272a();
     GN8012.Reset();
@@ -3683,6 +4034,8 @@ void ResetEmu() {
     z80irqmaxes = 8;
 
     Z80Init();
+    ReleaseSRWLockExclusive(&fddcpulock);
+    ReleaseSRWLockExclusive(&cpulock);
 }
 
 void checkthefddaccess(HWND hWnd) {
@@ -3708,6 +4061,50 @@ HINSTANCE hInst;                                // 現在のインターフェ�
 WCHAR szTitle[MAX_LOADSTRING];                  // タイトル バーのテキスト
 WCHAR szWindowClass[MAX_LOADSTRING];            // メイン ウィンドウ クラス名
 WCHAR szWindowClass2[MAX_LOADSTRING];            // メイン ウィンドウ クラス名
+
+WCHAR settingsfile[MAX_PATH] = {};
+WORD menulanguage = 0;
+
+void LoadSettings() {
+    menulanguage = GetUserDefaultUILanguage();
+    // Keep settings beside the executable, even if a file dialog changes the current directory.
+    DWORD length = GetModuleFileNameW(0, settingsfile, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH) { settingsfile[0] = 0; return; }
+    WCHAR* filename = wcsrchr(settingsfile, L'\\');
+    if (filename == 0 || filename - settingsfile + 1 + wcslen(L"GDI8001.ini") >= MAX_PATH) {
+        settingsfile[0] = 0;
+        return;
+    }
+    wcscpy(filename + 1, L"GDI8001.ini");
+    menulanguage = (WORD)GetPrivateProfileIntW(L"General", L"Language", menulanguage, settingsfile);
+    isfullspeedenabled = GetPrivateProfileIntW(L"General", L"FullSpeed", isfullspeedenabled, settingsfile) != 0;
+    crtc2 = (crtc2 & ~1) | (GetPrivateProfileIntW(L"DIP", L"N80", crtc2 & 1, settingsfile) ? 1 : 0);
+    bsmode = (bsmode & ~0x40) | (GetPrivateProfileIntW(L"DIP", L"Standard", !(bsmode & 0x40), settingsfile) ? 0 : 0x40);
+    bsmode = (bsmode & ~0x80) | (GetPrivateProfileIntW(L"DIP", L"V1", !(bsmode & 0x80), settingsfile) ? 0 : 0x80);
+    is8mhz = GetPrivateProfileIntW(L"DIP", L"8MHz", is8mhz, settingsfile) != 0;
+    isharftoneenabled = GetPrivateProfileIntW(L"Graphics", L"Halftone", isharftoneenabled, settingsfile) != 0;
+    greenmonitor = GetPrivateProfileIntW(L"Graphics", L"Green", greenmonitor, settingsfile) != 0;
+    isenabledpcg = GetPrivateProfileIntW(L"Graphics", L"PCG", isenabledpcg, settingsfile) != 0;
+}
+
+void SaveSetting(const WCHAR* section, const WCHAR* key, int value) {
+    WCHAR text[16];
+    wsprintfW(text, L"%d", value);
+    WritePrivateProfileStringW(section, key, text, settingsfile);
+}
+
+void SaveSettings() {
+    if (settingsfile[0] == 0) { return; }
+    SaveSetting(L"General", L"Language", menulanguage);
+    SaveSetting(L"General", L"FullSpeed", isfullspeedenabled);
+    SaveSetting(L"DIP", L"N80", crtc2 & 1);
+    SaveSetting(L"DIP", L"Standard", !(bsmode & 0x40));
+    SaveSetting(L"DIP", L"V1", !(bsmode & 0x80));
+    SaveSetting(L"DIP", L"8MHz", is8mhz);
+    SaveSetting(L"Graphics", L"Halftone", isharftoneenabled);
+    SaveSetting(L"Graphics", L"Green", greenmonitor);
+    SaveSetting(L"Graphics", L"PCG", isenabledpcg);
+}
 
 // このコード モジュールに含まれる関数の宣言を転送します:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -3789,7 +4186,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
     void (*initplugin)(void*);
     char FileName4Plugin[512];
 
-    for (int cnt = 0; cnt < 16; cnt++) { memset(erom[cnt % 4][cnt / 4], 0xff, 0x2000); }
+    // Initialize all option-ROM banks before loading any ROM files.
+    memset(erom, 0xff, sizeof(erom));
 
     isloadedfddcfirmware = false;
     fddconnected = true;
@@ -3982,6 +4380,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
         FindClose(handleofpluginlister);
     }
 
+    LoadSettings(); // Apply DIP switches before either CPU starts.
+    timeBeginPeriod(1); // Match the millisecond frame sleeps.
     FDDCZ80Threadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)PC8012Service, 0, 0, 0);
     Z80Threadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)RunZ80Infinity, 0, 0, 0);
     BSThreadid = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)BeepService, 0, 0, 0);
@@ -4006,6 +4406,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
     // アプリケーション初期化の実行:
     if (!InitInstance (hInstance, nCmdShow))
     {
+        timeEndPeriod(1);
         return FALSE;
     }
 
@@ -4023,6 +4424,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
         }
     }
 
+    timeEndPeriod(1);
     return (int) msg.wParam;
 }
 
@@ -4070,6 +4472,52 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 
     return RegisterClassExW(&wcex);
 }
+
+void SetMenuText(HMENU hMenu, HMENU hTranslation) {
+    for (int cnt = 0; cnt < GetMenuItemCount(hTranslation); cnt++) {
+        WCHAR text[256];
+        if (GetMenuStringW(hTranslation, cnt, text, 256, MF_BYPOSITION) != 0) {
+            MENUITEMINFOW menuitem = { sizeof(menuitem) };
+            menuitem.fMask = MIIM_STRING;
+            menuitem.dwTypeData = text;
+            SetMenuItemInfoW(hMenu, cnt, TRUE, &menuitem);
+        }
+        if (GetSubMenu(hTranslation, cnt) != 0) { SetMenuText(GetSubMenu(hMenu, cnt), GetSubMenu(hTranslation, cnt)); }
+    }
+}
+
+void ChangeMenuLanguage(HWND hWnd, WORD language) {
+    HMENU hMenu = GetMenu(hWnd);
+    if (hMenu == 0) { return; }
+    HMENU hLanguageMenu = GetSubMenu(hMenu, 4);
+    if (GetMenuState(hLanguageMenu, language, MF_BYCOMMAND) == (UINT)-1) { language = ID_LANGUAGE_ENGLISH; }
+    HRSRC resource = FindResourceExW(hInst, RT_MENU, MAKEINTRESOURCE(IDC_GDI8001), language);
+    if (resource == 0) { return; }
+    HGLOBAL data = LoadResource(hInst, resource);
+    if (data == 0) { return; }
+    const MENUTEMPLATEW* menutemplate = (const MENUTEMPLATEW*)LockResource(data);
+    if (menutemplate == 0) { return; }
+    HMENU hTranslation = LoadMenuIndirectW(menutemplate);
+    if (hTranslation == 0) { return; }
+    SetMenuText(hMenu, hTranslation);
+    DestroyMenu(hTranslation);
+    if (ispc8801 == true) {
+        WCHAR text[] = L"N88 / N BASIC";
+        MENUITEMINFOW menuitem = { sizeof(menuitem) };
+        menuitem.fMask = MIIM_STRING;
+        menuitem.dwTypeData = text;
+        SetMenuItemInfoW(hMenu, ID_DIPSW_N80, FALSE, &menuitem);
+    }
+    for (int cnt = 0; cnt < GetMenuItemCount(hLanguageMenu); cnt++) {
+        if (GetMenuItemID(hLanguageMenu, cnt) == language) {
+            CheckMenuRadioItem(hLanguageMenu, 0, GetMenuItemCount(hLanguageMenu) - 1, cnt, MF_BYPOSITION);
+            break;
+        }
+    }
+    menulanguage = language;
+    DrawMenuBar(hWnd);
+}
+
 
 //
 //   関数: InitInstance(HINSTANCE, int)
@@ -4163,6 +4611,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    CheckMenuItem(GetMenu(hWnd), ID_DIPSW_STANDARD, MF_BYCOMMAND | (!(bsmode & 0x40) ? MF_CHECKED : MF_UNCHECKED));
    CheckMenuItem(GetMenu(hWnd), ID_DIPSW_V1, MF_BYCOMMAND | (!(bsmode & 0x80) ? MF_CHECKED : MF_UNCHECKED));
    CheckMenuItem(GetMenu(hWnd), ID_DIPSW_4MHZ, MF_BYCOMMAND | (is8mhz ? MF_CHECKED : MF_UNCHECKED));
+   CheckMenuItem(GetMenu(hWnd), IDM_HFT, MF_BYCOMMAND | (isharftoneenabled ? MF_CHECKED : MF_UNCHECKED));
+   CheckMenuItem(GetMenu(hWnd), IDM_GREENDSP, MF_BYCOMMAND | (greenmonitor ? MF_CHECKED : MF_UNCHECKED));
+   CheckMenuItem(GetMenu(hWnd), IDM_PCG, MF_BYCOMMAND | (isenabledpcg ? MF_CHECKED : MF_UNCHECKED));
+   CheckMenuItem(GetMenu(hWnd), ID_32789, MF_BYCOMMAND | (isfullspeedenabled ? MF_CHECKED : MF_UNCHECKED));
+   ChangeMenuLanguage(hWnd, menulanguage);
 
    return TRUE;
 }
@@ -4187,11 +4640,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         mousemvenabled = true;
         RECT rw4rend;
         if (bool4showwin) {
-            GetClientRect(hwnd4mw, &rw4rend);
+            if (GetClientRect(hwnd4mw, &rw4rend) == false) { break; }
         }
         else {
-            GetClientRect(HWNDfullscr, &rw4rend);
+            if (GetClientRect(HWNDfullscr, &rw4rend) == false) { break; }
         }
+        // Ignore light-pen input when the client area has no usable size.
+        if (rw4rend.right <= 0 || rw4rend.bottom <= 0) { break; }
         lp_ggxy[0] = (((((lParam >> (16 * 0)) & 0xFFFF) * (pc8001widthflag ? 80 : 40)) / rw4rend.right) + (vbi ? 0x6 : 0x36));
         lp_ggxy[1] = ((((lParam >> (16 * 1)) & 0xFFFF) * (grpheight25 ? 25 : 20)) / rw4rend.bottom);
         litepeninp = ((((vbi?0:1) << 7) | (lp_ggxy[0] & 127)) << 0) | ((lp_ggxy[1] & 63) << 8);
@@ -4254,6 +4709,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_COMMAND:
         {
             int wmId = LOWORD(wParam);
+            if (GetMenuState(GetSubMenu(GetMenu(hWnd), 4), wmId, MF_BYCOMMAND) != (UINT)-1) {
+                ChangeMenuLanguage(hWnd, (WORD)wmId);
+                SaveSettings();
+                break;
+            }
             // 選択されたメニューの解析:
             switch (wmId)
             {
@@ -4268,29 +4728,39 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
             case IDM_HFT:
                 isharftoneenabled = (isharftoneenabled ? false : true);
+                CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | (isharftoneenabled ? MF_CHECKED : MF_UNCHECKED));
+                SaveSettings();
                 break;
             case IDM_GREENDSP:
                 greenmonitor = (greenmonitor ? false : true);
+                CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | (greenmonitor ? MF_CHECKED : MF_UNCHECKED));
+                SaveSettings();
                 break;
             case IDM_PCG:
                 for (int cnt = 0; cnt < 0x400; cnt++) { pcgcharram[cnt] = rand(); }
                 isenabledpcg = (isenabledpcg ? false : true);
+                CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | (isenabledpcg ? MF_CHECKED : MF_UNCHECKED));
+                SaveSettings();
                 break;
             case ID_DIPSW_N80:
                 crtc2 ^= 1;
                 CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | ((crtc2 & 1) ? MF_CHECKED : MF_UNCHECKED));
+                SaveSettings();
                 break;
             case ID_DIPSW_STANDARD:
                 bsmode ^= 0x40;
                 CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | (!(bsmode & 0x40) ? MF_CHECKED : MF_UNCHECKED));
+                SaveSettings();
                 break;
             case ID_DIPSW_V1:
                 bsmode ^= 0x80;
                 CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | (!(bsmode & 0x80) ? MF_CHECKED : MF_UNCHECKED));
+                SaveSettings();
                 break;
             case ID_DIPSW_4MHZ:
                 is8mhz = is8mhz ? false : true;
                 CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | (is8mhz ? MF_CHECKED : MF_UNCHECKED));
+                SaveSettings();
                 break;
             case ID_32778:
                 cmtreseted = true;
@@ -4383,6 +4853,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case ID_32789:
                 isfullspeedenabled = (isfullspeedenabled) ? false : true;
                 CheckMenuItem(GetMenu(hWnd), wmId, MF_BYCOMMAND | (isfullspeedenabled ? MF_CHECKED : MF_UNCHECKED));
+                SaveSettings();
                 break;
             default:
                 return DefWindowProc(hWnd, message, wParam, lParam);
@@ -4402,6 +4873,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     }
         break;
     case WM_DESTROY:
+        SaveSettings();
         waveOutUnprepareHeader(hWaveOut, &whdr, sizeof(WAVEHDR));
         waveOutClose(hWaveOut);
         free(lpWave);

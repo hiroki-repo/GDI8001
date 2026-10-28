@@ -31,6 +31,9 @@
 #define ID_DIPSW_V1                     32787
 #define ID_DIPSW_4MHZ                   32788
 #define ID_32789                        32789
+// Language command IDs are Windows language identifiers.
+#define ID_LANGUAGE_JAPANESE             1041
+#define ID_LANGUAGE_ENGLISH              1033
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
